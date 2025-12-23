@@ -841,6 +841,32 @@ class OptimizedChinaDataProvider:
         logger.error(f"❌ {error_msg}")
         raise ValueError(error_msg)
 
+    def _run_async_blocking(self, coro):
+        import asyncio
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            return loop.run_until_complete(coro)
+
+        import concurrent.futures
+
+        def _runner():
+            import asyncio as _asyncio
+            return _asyncio.run(coro)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(_runner).result()
+
     def _get_real_financial_metrics(self, symbol: str, price_value: float) -> dict:
         """获取真实财务指标 - 优先使用数据库缓存，再使用API"""
         try:
@@ -896,19 +922,21 @@ class OptimizedChinaDataProvider:
 
             # 第二优先级：从AKShare API获取
             from .providers.china.akshare import get_akshare_provider
-            import asyncio
 
             akshare_provider = get_akshare_provider()
 
             if akshare_provider.connected:
-                # AKShare的get_financial_data是异步方法，需要使用asyncio运行
-                loop = asyncio.get_event_loop()
-                financial_data = loop.run_until_complete(akshare_provider.get_financial_data(symbol))
+                async def _fetch_akshare():
+                    fin = await akshare_provider.get_financial_data(symbol)
+                    if fin and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in fin.values()):
+                        info = await akshare_provider.get_stock_basic_info(symbol)
+                        return fin, info
+                    return fin, None
 
-                if financial_data and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in financial_data.values()):
+                financial_data, stock_info = self._run_async_blocking(_fetch_akshare())
+
+                if financial_data and stock_info and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in financial_data.values()):
                     logger.info(f"✅ AKShare财务数据获取成功: {symbol}")
-                    # 获取股票基本信息（也是异步方法）
-                    stock_info = loop.run_until_complete(akshare_provider.get_stock_basic_info(symbol))
 
                     # 解析AKShare财务数据
                     logger.debug(f"🔧 调用AKShare解析函数，股价: {price_value}")
@@ -929,22 +957,23 @@ class OptimizedChinaDataProvider:
             # 第三优先级：使用Tushare数据源
             logger.info(f"🔄 使用Tushare备用数据源获取{symbol}财务数据")
             from .providers.china.tushare import get_tushare_provider
-            import asyncio
 
             provider = get_tushare_provider()
             if not provider.connected:
                 logger.debug(f"Tushare未连接，无法获取{symbol}真实财务数据")
                 return None
 
-            # 获取财务数据（异步方法）
-            loop = asyncio.get_event_loop()
-            financial_data = loop.run_until_complete(provider.get_financial_data(symbol))
+            async def _fetch_tushare():
+                fin = await provider.get_financial_data(symbol)
+                if not fin:
+                    return fin, None
+                info = await provider.get_stock_basic_info(symbol)
+                return fin, info
+
+            financial_data, stock_info = self._run_async_blocking(_fetch_tushare())
             if not financial_data:
                 logger.debug(f"未获取到{symbol}的财务数据")
                 return None
-
-            # 获取股票基本信息（异步方法）
-            stock_info = loop.run_until_complete(provider.get_stock_basic_info(symbol))
 
             # 解析Tushare财务数据
             metrics = self._parse_financial_data(financial_data, stock_info, price_value)

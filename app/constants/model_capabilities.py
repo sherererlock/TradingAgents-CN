@@ -125,6 +125,14 @@ DEFAULT_MODEL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "performance_metrics": {"speed": 2, "cost": 1, "quality": 5},
         "description": "通义千问长文本版，超长上下文"
     },
+    "qwen3-max-preview": {
+        "capability_level": 6,
+        "suitable_roles": [ModelRole.DEEP_ANALYSIS],
+        "features": [ModelFeature.TOOL_CALLING, ModelFeature.LONG_CONTEXT, ModelFeature.REASONING],
+        "recommended_depths": ["深度", "全面"],
+        "performance_metrics": {"speed": 2, "cost": 1, "quality": 5},
+        "description": "通义千问长文本版，超长上下文"
+    },
     
     # ==================== OpenAI ====================
     "gpt-3.5-turbo": {

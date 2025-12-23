@@ -248,6 +248,45 @@
           },
           {
             "provider": "dashscope",
+            "model_name": "qwen3-max-preview",
+            "model_display_name": "",
+            "api_key": "",
+            "api_base": "",
+            "max_tokens": 8000,
+            "temperature": 0.7,
+            "timeout": 120,
+            "retry_times": 3,
+            "enabled": true,
+            "description": "",
+            "model_category": "",
+            "custom_endpoint": null,
+            "enable_memory": false,
+            "enable_debug": false,
+            "priority": 1,
+            "input_price_per_1k": 0.006,
+            "output_price_per_1k": 0.024,
+            "currency": "CNY",
+            "capability_level": 5,
+            "suitable_roles": [
+              "deep_analysis"
+            ],
+            "features": [
+              "tool_calling",
+              "long_context",
+              "reasoning"
+            ],
+            "recommended_depths": [
+              "深度",
+              "全面"
+            ],
+            "performance_metrics": {
+              "speed": 3,
+              "cost": 3,
+              "quality": 3
+            }
+          },
+          {
+            "provider": "dashscope",
             "model_name": "qwen-flash",
             "model_display_name": "",
             "api_key": "",
@@ -13674,6 +13713,19 @@
           {
             "name": "qwen3-max",
             "display_name": "通义千问3系列Max模型- 最强性能",
+            "description": null,
+            "context_length": 32768,
+            "max_tokens": null,
+            "input_price_per_1k": 0.006,
+            "output_price_per_1k": 0.024,
+            "currency": "CNY",
+            "is_deprecated": false,
+            "release_date": null,
+            "capabilities": []
+          },
+          {
+            "name": "qwen3-max-preview",
+            "display_name": "通义千问3系列Max预览模型- 最强性能",
             "description": null,
             "context_length": 32768,
             "max_tokens": null,
