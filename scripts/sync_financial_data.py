@@ -15,6 +15,7 @@
 
 import asyncio
 import sys
+import pandas as pd
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -57,8 +58,10 @@ async def sync_single_stock_financial_data(
         import akshare as ak
 
         def fetch_financial_indicator():
-            return ak.stock_financial_analysis_indicator(symbol=code6)
-
+            df1 = ak.stock_financial_debt_ths(symbol=code6) # 资产负债表
+            df2 = ak.stock_financial_abstract_ths(symbol=code6) # 财务指标摘要
+            df = pd.merge(df1, df2, on='报告期', how='inner')
+            return df.sort_values('报告期', ascending=True).reset_index(drop=True)
         try:
             df = await asyncio.to_thread(fetch_financial_indicator)
 
@@ -72,11 +75,11 @@ async def sync_single_stock_financial_data(
             logger.info(f"   获取到 {len(df)} 期财务数据，最新期: {latest.get('报告期', 'N/A')}")
 
             # 计算 TTM（最近12个月）营业收入和净利润
-            ttm_revenue = _calculate_ttm_metric(df, '营业收入')
+            ttm_revenue = _calculate_ttm_metric(df, '营业总收入')
             ttm_net_profit = _calculate_ttm_metric(df, '净利润')
 
             if ttm_revenue:
-                logger.info(f"   TTM营业收入: {ttm_revenue:.2f} 万元")
+                logger.info(f"   TTM营业总收入: {ttm_revenue:.2f} 万元")
             if ttm_net_profit:
                 logger.info(f"   TTM净利润: {ttm_net_profit:.2f} 万元")
 
@@ -84,6 +87,9 @@ async def sync_single_stock_financial_data(
             logger.error(f"❌ {code6} 获取财务指标失败: {e}")
             return False
 
+        net_profit = _parse_financial_value(latest.get('净利润')) / 10000  # 净利润（单期）
+        total_assets =  _parse_financial_value(latest.get('资产合计')) / 10000  # 总资产
+        revenue = _parse_financial_value(latest.get('营业总收入')) / 10000  # 营业总收入（单期）
         # 2. 解析财务数据
         financial_data = {
             "code": code6,
@@ -93,31 +99,31 @@ async def sync_single_stock_financial_data(
             "updated_at": datetime.utcnow(),
 
             # 盈利能力指标
-            "roe": _safe_float(latest.get('净资产收益率')),  # ROE
-            "roa": _safe_float(latest.get('总资产净利率')),  # ROA
-            "gross_margin": _safe_float(latest.get('销售毛利率')),  # 毛利率
-            "netprofit_margin": _safe_float(latest.get('销售净利率')),  # 净利率
+            "roe": _parse_financial_value(latest.get('净资产收益率')),  # ROE
+            "roa": 100 * net_profit / total_assets if all([net_profit, total_assets]) else None, # ROA
+            "gross_margin": _parse_financial_value(latest.get('销售毛利率')),  # 毛利率
+            "netprofit_margin": _parse_financial_value(latest.get('销售净利率')),  # 净利率
 
             # 财务数据（万元）
-            "revenue": _safe_float(latest.get('营业收入')),  # 营业收入（单期）
-            "revenue_ttm": ttm_revenue,  # TTM营业收入（最近12个月）
-            "net_profit": _safe_float(latest.get('净利润')),  # 净利润（单期）
+            "revenue": revenue,
+            "revenue_ttm": ttm_revenue,  # TTM营业总收入（最近12个月）
+            "net_profit": net_profit,
             "net_profit_ttm": ttm_net_profit,  # TTM净利润（最近12个月）
-            "total_assets": _safe_float(latest.get('总资产')),  # 总资产
-            "total_hldr_eqy_exc_min_int": _safe_float(latest.get('股东权益合计')),  # 净资产
+            "total_assets": total_assets,
+            "total_hldr_eqy_exc_min_int": _parse_financial_value(latest.get('归属于母公司所有者权益合计')) / 10000,  # 净资产
 
             # 每股指标
-            "basic_eps": _safe_float(latest.get('基本每股收益')),  # 每股收益
-            "bps": _safe_float(latest.get('每股净资产')),  # 每股净资产
+            "basic_eps": _parse_financial_value(latest.get('基本每股收益')),  # 每股收益
+            "bps": _parse_financial_value(latest.get('每股净资产')),  # 每股净资产
 
             # 偿债能力指标
-            "debt_to_assets": _safe_float(latest.get('资产负债率')),  # 资产负债率
-            "current_ratio": _safe_float(latest.get('流动比率')),  # 流动比率
+            "debt_to_assets": _parse_financial_value(latest.get('资产负债率')),  # 资产负债率
+            "current_ratio": _parse_financial_value(latest.get('流动比率')),  # 流动比率
 
             # 运营能力指标
-            "total_asset_turnover": _safe_float(latest.get('总资产周转率')),  # 总资产周转率
+            "total_asset_turnover": revenue / total_assets if all([revenue, total_assets]) else None,  # 总资产周转率(次)
         }
-        
+
         # 3. 获取股本数据
         try:
             def fetch_stock_info():
@@ -144,7 +150,7 @@ async def sync_single_stock_financial_data(
         
         except Exception as e:
             logger.warning(f"⚠️  {code6} 获取股本数据失败: {e}")
-        
+        logger.info(f"   解析财务数据: {financial_data}")
         # 4. 计算市值和估值指标（如果有实时价格）
         quote = await db.market_quotes.find_one(
             {"$or": [{"code": code6}, {"symbol": code6}]}
@@ -218,16 +224,6 @@ async def sync_single_stock_financial_data(
         return False
 
 
-def _safe_float(value) -> Optional[float]:
-    """安全转换为浮点数"""
-    if value is None or value == '' or str(value) == 'nan' or value == '--':
-        return None
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return None
-
-
 def _calculate_ttm_metric(df, metric_name: str) -> Optional[float]:
     """
     计算 TTM（最近12个月）指标值（营业收入、净利润等）
@@ -252,20 +248,16 @@ def _calculate_ttm_metric(df, metric_name: str) -> Optional[float]:
         if '报告期' not in df.columns or metric_name not in df.columns:
             return None
 
-        # 按报告期排序（升序）
-        df_sorted = df.sort_values('报告期', ascending=True).reset_index(drop=True)
-
         # 获取最新一期
-        latest = df_sorted.iloc[-1]
+        latest = df.iloc[-1]
         latest_period = str(latest['报告期'])
-        latest_value = _safe_float(latest[metric_name])
+        latest_value = _parse_financial_value(latest[metric_name])
 
         if latest_value is None:
             return None
-
-        # 判断最新期是否是年报（报告期以1231结尾）
-        if latest_period.endswith('1231'):
-            # 年报，直接使用
+        # 判断最新期是否是年报（报告期以12-31结尾）
+        if latest_period.endswith('12-31'):
+            latest_value /= 10000 # 万元
             logger.debug(f"   使用年报{metric_name}作为TTM: {latest_value:.2f} 万元")
             return latest_value
 
@@ -273,28 +265,28 @@ def _calculate_ttm_metric(df, metric_name: str) -> Optional[float]:
         # 提取年份和月份
         try:
             year = int(latest_period[:4])
-            month_day = latest_period[4:]
+            month_day = latest_period[5:]
         except:
             return None
 
-        # 查找最近的年报（上一年的1231）
+        # 查找最近的年报（上一年的12-31）
         last_year = year - 1
-        last_annual_period = f"{last_year}1231"
+        last_annual_period = f"{last_year}-12-31"
 
         # 查找去年同期
-        last_same_period = f"{last_year}{month_day}"
+        last_same_period = f"{last_year}-{month_day}"
 
         # 在 DataFrame 中查找
-        last_annual_row = df_sorted[df_sorted['报告期'] == last_annual_period]
-        last_same_row = df_sorted[df_sorted['报告期'] == last_same_period]
+        last_annual_row = df[df['报告期'] == last_annual_period]
+        last_same_row = df[df['报告期'] == last_same_period]
 
         if not last_annual_row.empty and not last_same_row.empty:
-            last_annual_value = _safe_float(last_annual_row.iloc[0][metric_name])
-            last_same_value = _safe_float(last_same_row.iloc[0][metric_name])
+            last_annual_value = _parse_financial_value(last_annual_row.iloc[0][metric_name])
+            last_same_value = _parse_financial_value(last_same_row.iloc[0][metric_name])
 
             if last_annual_value is not None and last_same_value is not None:
                 # TTM = 最近年报 + (本期累计 - 去年同期累计)
-                ttm_value = last_annual_value + (latest_value - last_same_value)
+                ttm_value = (last_annual_value + (latest_value - last_same_value)) / 10000
                 logger.debug(f"   ✅ 计算{metric_name}TTM: {last_annual_value:.2f} + ({latest_value:.2f} - {last_same_value:.2f}) = {ttm_value:.2f} 万元")
                 return ttm_value if ttm_value > 0 else None
 
@@ -336,6 +328,40 @@ def _parse_share_value(value_str: str) -> Optional[float]:
             # 假设是股数，转换为万股
             return float(value_str) / 10000
     except:
+        return None
+
+
+def _parse_financial_value(value_str) -> Optional[float]:
+    """解析财务数值（支持带单位和百分比的格式）"""
+    if value_str is None:
+        return None
+    
+    try:
+        value_str = str(value_str).strip()
+        
+        # 处理空值和特殊标记
+        if value_str in ['--', '', 'nan', 'None', 'False']:
+            return None
+        
+        # 处理百分比
+        if '%' in value_str:
+            # 移除百分号并转换为小数
+            return float(value_str.replace('%', ''))
+        
+        # 处理带单位的数值（亿、万）
+        if '万亿' in value_str:
+            num = float(value_str.replace('万亿', ''))
+            return num * 10000 * 10000 * 10000  # 万亿 -> 元
+        elif '亿' in value_str:
+            num = float(value_str.replace('亿', ''))
+            return num * 100000000  # 亿 -> 元
+        elif '万' in value_str:
+            num = float(value_str.replace('万', ''))
+            return num * 10000  # 万 -> 元
+        
+        # 直接转换为浮点数
+        return float(value_str)
+    except (ValueError, TypeError):
         return None
 
 
