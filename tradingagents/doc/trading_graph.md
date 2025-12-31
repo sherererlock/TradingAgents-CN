@@ -1,4 +1,4 @@
-`TradingAgents-CN/tradingagents/graph/trading_graph.py` 文件是整个交易代理系统的**组装工厂**和**总控中心**。它负责初始化所有组件，并将它们连接成一个可执行的 LangGraph 图。
+文件是整个交易代理系统的**组装工厂**和**总控中心**。它负责初始化所有组件，并将它们连接成一个可执行的 LangGraph 图。
 
 以下是你需要掌握的 4 个核心内容：
 

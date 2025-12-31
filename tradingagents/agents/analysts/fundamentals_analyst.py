@@ -633,21 +633,21 @@ def create_fundamentals_analyst(llm, toolkit):
                 # 生成基于真实数据的分析报告
                 analysis_prompt = f"""基于以下真实数据，对{company_name}（股票代码：{ticker}）进行详细的基本面分析：
 
-{combined_data}
+                {combined_data}
 
-请提供：
-1. 公司基本信息分析（{company_name}，股票代码：{ticker}）
-2. 财务状况评估
-3. 盈利能力分析
-4. 估值分析（使用{currency_info}）
-5. 投资建议（买入/持有/卖出）
+                请提供：
+                1. 公司基本信息分析（{company_name}，股票代码：{ticker}）
+                2. 财务状况评估
+                3. 盈利能力分析
+                4. 估值分析（使用{currency_info}）
+                5. 投资建议（买入/持有/卖出）
 
-要求：
-- 基于提供的真实数据进行分析
-- 正确使用公司名称"{company_name}"和股票代码"{ticker}"
-- 价格使用{currency_info}
-- 投资建议使用中文
-- 分析要详细且专业"""
+                要求：
+                - 基于提供的真实数据进行分析
+                - 正确使用公司名称"{company_name}"和股票代码"{ticker}"
+                - 价格使用{currency_info}
+                - 投资建议使用中文
+                - 分析要详细且专业"""
 
                 try:
                     # 创建简单的分析链
