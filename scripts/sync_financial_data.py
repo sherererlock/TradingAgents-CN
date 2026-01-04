@@ -52,6 +52,7 @@ async def sync_single_stock_financial_data(
     """
     code6 = str(code).zfill(6)
     
+
     try:
         logger.info(f"🔄 同步 {code6} 的财务数据...")
         
@@ -215,6 +216,8 @@ async def sync_single_stock_financial_data(
             upsert=True
         )
         
+        print(financial_data)
+
         logger.info(f"✅ {code6} 财务数据同步成功")
         return True
         
@@ -381,6 +384,9 @@ async def main(code: Optional[str] = None, sync_all: bool = False, batch: Option
     # 初始化 Provider
     provider = AKShareProvider()
     await provider.connect()
+
+    if code is None:
+        code = "600089"
     
     try:
         if code:
