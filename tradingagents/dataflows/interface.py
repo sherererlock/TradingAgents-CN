@@ -1293,45 +1293,45 @@ def _get_fundamentals_yfinance(ticker, curr_date, cache):
             # 格式化 yfinance 数据
             result = f"""# {ticker} 基本面数据 (来源: Yahoo Finance)
 
-## 公司信息
-- 公司名称: {info.get('longName', 'N/A')}
-- 行业: {info.get('industry', 'N/A')}
-- 板块: {info.get('sector', 'N/A')}
-- 网站: {info.get('website', 'N/A')}
+            ## 公司信息
+            - 公司名称: {info.get('longName', 'N/A')}
+            - 行业: {info.get('industry', 'N/A')}
+            - 板块: {info.get('sector', 'N/A')}
+            - 网站: {info.get('website', 'N/A')}
 
-## 估值指标
-- 市值: ${info.get('marketCap', 'N/A'):,}
-- PE比率: {info.get('trailingPE', 'N/A')}
-- 前瞻PE: {info.get('forwardPE', 'N/A')}
-- PB比率: {info.get('priceToBook', 'N/A')}
-- PS比率: {info.get('priceToSalesTrailing12Months', 'N/A')}
+            ## 估值指标
+            - 市值: ${info.get('marketCap', 'N/A'):,}
+            - PE比率: {info.get('trailingPE', 'N/A')}
+            - 前瞻PE: {info.get('forwardPE', 'N/A')}
+            - PB比率: {info.get('priceToBook', 'N/A')}
+            - PS比率: {info.get('priceToSalesTrailing12Months', 'N/A')}
 
-## 财务指标
-- 总收入: ${info.get('totalRevenue', 'N/A'):,}
-- 毛利润: ${info.get('grossProfits', 'N/A'):,}
-- EBITDA: ${info.get('ebitda', 'N/A'):,}
-- 每股收益(EPS): ${info.get('trailingEps', 'N/A')}
-- 股息率: {info.get('dividendYield', 'N/A')}
+            ## 财务指标
+            - 总收入: ${info.get('totalRevenue', 'N/A'):,}
+            - 毛利润: ${info.get('grossProfits', 'N/A'):,}
+            - EBITDA: ${info.get('ebitda', 'N/A'):,}
+            - 每股收益(EPS): ${info.get('trailingEps', 'N/A')}
+            - 股息率: {info.get('dividendYield', 'N/A')}
 
-## 盈利能力
-- 利润率: {info.get('profitMargins', 'N/A')}
-- 营业利润率: {info.get('operatingMargins', 'N/A')}
-- ROE: {info.get('returnOnEquity', 'N/A')}
-- ROA: {info.get('returnOnAssets', 'N/A')}
+            ## 盈利能力
+            - 利润率: {info.get('profitMargins', 'N/A')}
+            - 营业利润率: {info.get('operatingMargins', 'N/A')}
+            - ROE: {info.get('returnOnEquity', 'N/A')}
+            - ROA: {info.get('returnOnAssets', 'N/A')}
 
-## 股价信息
-- 当前价格: ${info.get('currentPrice', 'N/A')}
-- 52周最高: ${info.get('fiftyTwoWeekHigh', 'N/A')}
-- 52周最低: ${info.get('fiftyTwoWeekLow', 'N/A')}
-- 50日均线: ${info.get('fiftyDayAverage', 'N/A')}
-- 200日均线: ${info.get('twoHundredDayAverage', 'N/A')}
+            ## 股价信息
+            - 当前价格: ${info.get('currentPrice', 'N/A')}
+            - 52周最高: ${info.get('fiftyTwoWeekHigh', 'N/A')}
+            - 52周最低: ${info.get('fiftyTwoWeekLow', 'N/A')}
+            - 50日均线: ${info.get('fiftyDayAverage', 'N/A')}
+            - 200日均线: ${info.get('twoHundredDayAverage', 'N/A')}
 
-## 分析师评级
-- 目标价: ${info.get('targetMeanPrice', 'N/A')}
-- 推荐评级: {info.get('recommendationKey', 'N/A')}
+            ## 分析师评级
+            - 目标价: ${info.get('targetMeanPrice', 'N/A')}
+            - 推荐评级: {info.get('recommendationKey', 'N/A')}
 
-数据获取时间: {curr_date}
-"""
+            数据获取时间: {curr_date}
+            """
             # 保存到缓存
             cache.save_fundamentals_data(ticker, result, data_source="yfinance")
             logger.info(f"✅ [yfinance] 基本面数据获取成功: {ticker}")

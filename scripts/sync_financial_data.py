@@ -14,6 +14,7 @@
 """
 
 import asyncio
+import os
 import sys
 import pandas as pd
 from pathlib import Path
@@ -372,8 +373,10 @@ async def main(code: Optional[str] = None, sync_all: bool = False, batch: Option
     logger.info("=" * 80)
     
     # 连接数据库
-    client = AsyncIOMotorClient(settings.MONGO_URI)
-    db = client[settings.MONGO_DB]
+    mongo_uri = os.getenv("MONGODB_CONNECTION_STRING") or settings.MONGO_URI
+    db_name = os.getenv("MONGODB_DATABASE_NAME") or settings.MONGO_DB
+    client = AsyncIOMotorClient(mongo_uri)
+    db = client[db_name]
     
     # 初始化 Provider
     provider = AKShareProvider()
