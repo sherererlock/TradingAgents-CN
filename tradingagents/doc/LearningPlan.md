@@ -64,7 +64,7 @@ Agent 运行所依赖的“系统件”：
 - [agent_state.md](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/doc/agent_state.md)
 - [market_analyst.md](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/doc/market_analyst.md)
 - [fundamentals_analyst.md](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/doc/fundamentals_analyst.md)
-- [ToolKit.md](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/doc/ToolKit.md)
+- [ToolKit.md](ToolKit.md)
 - [Memory.md](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/doc/Memory.md)
 
 ### 1.3 数据流与数据源（Dataflows）
