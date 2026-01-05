@@ -123,7 +123,8 @@ class IntegratedCacheManager:
             return self.legacy_cache.load_stock_data(cache_key)
     
     def find_cached_stock_data(self, symbol: str, start_date: str = None, 
-                              end_date: str = None, data_source: str = "default") -> Optional[str]:
+                              end_date: str = None, data_source: str = "default",
+                              max_age_hours: int = None) -> Optional[str]:
         """
         查找缓存的股票数据
         
@@ -151,7 +152,8 @@ class IntegratedCacheManager:
                 symbol=symbol,
                 start_date=start_date,
                 end_date=end_date,
-                data_source=data_source
+                data_source=data_source,
+                max_age_hours=max_age_hours
             )
     
     def save_news_data(self, symbol: str, data: Any, data_source: str = "default") -> str:
