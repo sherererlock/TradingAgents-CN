@@ -7,7 +7,7 @@ import asyncio
 import argparse
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # 添加项目根目录到Python路径
@@ -132,6 +132,121 @@ async def check_database_status():
         return False
 
 
+def _mask_token(token: str) -> str:
+    if not token:
+        return ""
+    token = str(token)
+    if len(token) <= 8:
+        return "*" * len(token)
+    return f"{token[:3]}***{token[-3:]}"
+
+
+async def check_tushare_status(test_ts_code: str = "000001.SZ") -> bool:
+    print("🔌 检查 Tushare Token 与接口连通性...")
+
+    env_token = os.getenv("TUSHARE_TOKEN", "")
+    if env_token:
+        placeholder = env_token.startswith("your_")
+        env_status = "占位符" if placeholder else "已设置"
+        print(f"  • 环境变量 TUSHARE_TOKEN: {env_status} (长度: {len(env_token)}, 预览: {_mask_token(env_token)})")
+    else:
+        print("  • 环境变量 TUSHARE_TOKEN: 未设置")
+
+    try:
+        from tradingagents.dataflows.providers.china.tushare import TushareProvider
+    except Exception as e:
+        print(f"  ❌ 无法导入 TushareProvider: {e}")
+        return False
+
+    provider = TushareProvider()
+
+    db_token = None
+    try:
+        db_token = await asyncio.to_thread(provider._get_token_from_database)
+    except Exception:
+        db_token = None
+
+    if db_token:
+        placeholder = str(db_token).startswith("your_")
+        db_status = "占位符" if placeholder else "已设置"
+        print(f"  • 数据库 Token: {db_status} (长度: {len(str(db_token))}, 预览: {_mask_token(str(db_token))})")
+    else:
+        print("  • 数据库 Token: 未找到或不可用")
+
+    try:
+        ok = await provider.connect()
+    except Exception as e:
+        print(f"  ❌ Tushare 连接异常: {e}")
+        return False
+
+    if not ok or not getattr(provider, "api", None):
+        print("  ❌ Tushare 连接失败")
+        return False
+
+    print("  ✅ Tushare 连接成功")
+
+    try:
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)).strftime("%Y%m%d")
+        df = await asyncio.to_thread(
+            provider.api.trade_cal,
+            exchange="SSE",
+            start_date=start_date,
+            end_date=end_date
+        )
+        if df is not None and len(df) > 0:
+            print(f"  • trade_cal 返回: {len(df)} 行")
+    except Exception as e:
+        print(f"  ⚠️ trade_cal 调用失败: {e}")
+
+    try:
+        df = await asyncio.to_thread(
+            provider.api.stock_basic,
+            list_status="L",
+            ts_code=test_ts_code,
+            limit=1
+        )
+        if df is not None and not df.empty:
+            name = df.iloc[0].get("name")
+            print(f"  • stock_basic: {test_ts_code} {name or ''}".rstrip())
+        else:
+            print(f"  ⚠️ stock_basic: 返回空数据 (ts_code={test_ts_code})")
+    except Exception as e:
+        print(f"  ⚠️ stock_basic 调用失败: {e}")
+
+    try:
+        trade_cal = await asyncio.to_thread(
+            provider.api.trade_cal,
+            exchange="SSE",
+            start_date=(datetime.now() - timedelta(days=30)).strftime("%Y%m%d"),
+            end_date=datetime.now().strftime("%Y%m%d"),
+            is_open=1
+        )
+        trade_date = None
+        if trade_cal is not None and len(trade_cal) > 0:
+            trade_date = str(trade_cal.iloc[-1].get("cal_date"))
+
+        if trade_date:
+            df = await asyncio.to_thread(
+                provider.api.daily_basic,
+                ts_code=test_ts_code,
+                trade_date=trade_date,
+                fields="ts_code,trade_date,pe,pb,dv_ratio,total_mv"
+            )
+            if df is not None and not df.empty:
+                row = df.iloc[0].to_dict()
+                pe = row.get("pe")
+                pb = row.get("pb")
+                dv = row.get("dv_ratio")
+                print(f"  • daily_basic({trade_date}): PE={pe} PB={pb} 股息率={dv}")
+            else:
+                print(f"  ⚠️ daily_basic: 返回空数据 (ts_code={test_ts_code}, trade_date={trade_date})")
+    except Exception as e:
+        print(f"  ⚠️ daily_basic 调用失败: {e}")
+
+    return True
+
+
 async def run_basic_initialization():
     """运行基础信息初始化"""
     print("📋 开始基础信息初始化...")
@@ -221,6 +336,8 @@ async def main():
     parser.add_argument("--force", action="store_true", help="强制初始化")
     parser.add_argument("--batch-size", type=int, default=100, help="批处理大小")
     parser.add_argument("--check-only", action="store_true", help="仅检查数据库状态")
+    parser.add_argument("--check-tushare", action="store_true", help="检查 Tushare Token 与接口连通性")
+    parser.add_argument("--test-ts-code", type=str, default="000001.SZ", help="Tushare 测试股票代码（默认000001.SZ）")
     parser.add_argument("--help-detail", action="store_true", help="显示详细帮助")
     
     args = parser.parse_args()
@@ -233,6 +350,12 @@ async def main():
     print_banner()
     
     try:
+        if args.check_tushare and not (args.full or args.basic_only or args.check_only):
+            tushare_ok = await check_tushare_status(test_ts_code=args.test_ts_code)
+            if not tushare_ok:
+                sys.exit(1)
+            return
+
         # 初始化数据库连接
         print("🔄 初始化数据库连接...")
         await init_database()
@@ -242,16 +365,27 @@ async def main():
         # 检查数据库状态
         db_ok = await check_database_status()
         print()
+
+        tushare_ok = True
+        if args.check_tushare:
+            tushare_ok = await check_tushare_status(test_ts_code=args.test_ts_code)
+            print()
         
         # 根据参数执行相应操作
         if args.check_only:
             print("📋 数据库状态检查完成")
+            if args.check_tushare and not tushare_ok:
+                sys.exit(1)
             return
         
         elif args.basic_only:
+            if args.check_tushare and not tushare_ok:
+                sys.exit(1)
             success = await run_basic_initialization()
             
         elif args.full:
+            if args.check_tushare and not tushare_ok:
+                sys.exit(1)
             if not args.force and db_ok:
                 print("⚠️ 数据库已有数据，使用 --force 强制重新初始化")
                 return
@@ -271,6 +405,10 @@ async def main():
             success = await run_full_initialization(args.historical_days, args.force, args.multi_period, sync_items)
             
         else:
+            if args.check_tushare:
+                if not tushare_ok:
+                    sys.exit(1)
+                return
             print("❓ 请指定操作类型，使用 --help-detail 查看详细帮助")
             return
         
