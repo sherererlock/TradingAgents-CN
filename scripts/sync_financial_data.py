@@ -60,10 +60,112 @@ async def sync_single_stock_financial_data(
         import akshare as ak
 
         def fetch_financial_indicator():
-            df1 = ak.stock_financial_debt_ths(symbol=code6) # 资产负债表
-            df2 = ak.stock_financial_abstract_ths(symbol=code6) # 财务指标摘要
-            df = pd.merge(df1, df2, on='报告期', how='inner')
-            return df.sort_values('报告期', ascending=True).reset_index(drop=True)
+            df1 = ak.stock_financial_debt_ths(symbol=code6)
+            df2 = ak.stock_financial_abstract_ths(symbol=code6)
+
+            if (
+                isinstance(df1, pd.DataFrame)
+                and isinstance(df2, pd.DataFrame)
+                and ('报告期' in df1.columns)
+                and ('报告期' in df2.columns)
+            ):
+                df = pd.merge(df1, df2, on='报告期', how='inner')
+                return df.sort_values('报告期', ascending=True).reset_index(drop=True)
+
+            indicator_raw = ak.stock_financial_abstract(symbol=code6)
+            if indicator_raw is None or getattr(indicator_raw, "empty", True):
+                raise RuntimeError("stock_financial_abstract 返回空数据")
+
+            if "指标" not in indicator_raw.columns:
+                raise RuntimeError(f"stock_financial_abstract 缺少“指标”列: {list(indicator_raw.columns)}")
+
+            meta_cols = [c for c in ["选项", "指标"] if c in indicator_raw.columns]
+            date_cols = [c for c in indicator_raw.columns if c not in meta_cols]
+            indicator_table = indicator_raw[["指标"] + date_cols].copy()
+            indicator_table["指标"] = indicator_table["指标"].astype(str).str.strip()
+            indicator_table = indicator_table.groupby("指标", as_index=False).first()
+            indicator_wide = indicator_table.set_index("指标").T
+            indicator_wide.index.name = "报告期_raw"
+            indicator_wide = indicator_wide.reset_index()
+            indicator_wide["报告期"] = (
+                pd.to_datetime(indicator_wide["报告期_raw"], format="%Y%m%d", errors="coerce")
+                .dt.strftime("%Y-%m-%d")
+            )
+            indicator_wide = indicator_wide.drop(columns=["报告期_raw"])
+            indicator_wide = indicator_wide[indicator_wide["报告期"].notna()].reset_index(drop=True)
+
+            if "归母净利润" in indicator_wide.columns and "净利润" not in indicator_wide.columns:
+                indicator_wide["净利润"] = indicator_wide["归母净利润"]
+            if "毛利率" in indicator_wide.columns and "销售毛利率" not in indicator_wide.columns:
+                indicator_wide["销售毛利率"] = indicator_wide["毛利率"]
+            if "净资产收益率(ROE)" in indicator_wide.columns and "净资产收益率" not in indicator_wide.columns:
+                indicator_wide["净资产收益率"] = indicator_wide["净资产收益率(ROE)"]
+
+            merged = indicator_wide
+            if (
+                isinstance(df1, pd.DataFrame)
+                and {"report_date", "metric_name", "value"}.issubset(set(df1.columns))
+            ):
+                required_metrics = [
+                    "assets_total",
+                    "parent_holder_equity_total",
+                    "total_debt",
+                    "total_current_assets",
+                    "current_total_debt",
+                ]
+                debt_filtered = df1[df1["metric_name"].isin(required_metrics)].copy()
+                if not debt_filtered.empty:
+                    debt_wide = (
+                        debt_filtered.pivot_table(
+                            index="report_date",
+                            columns="metric_name",
+                            values="value",
+                            aggfunc="first",
+                        )
+                        .reset_index()
+                    )
+                    debt_wide["报告期"] = pd.to_datetime(debt_wide["report_date"], errors="coerce").dt.strftime(
+                        "%Y-%m-%d"
+                    )
+                    debt_wide = debt_wide.drop(columns=["report_date"])
+
+                    if "assets_total" in debt_wide.columns and "资产合计" not in debt_wide.columns:
+                        debt_wide["资产合计"] = debt_wide["assets_total"]
+                    if (
+                        "parent_holder_equity_total" in debt_wide.columns
+                        and "归属于母公司所有者权益合计" not in debt_wide.columns
+                    ):
+                        debt_wide["归属于母公司所有者权益合计"] = debt_wide["parent_holder_equity_total"]
+
+                    if (
+                        "assets_total" in debt_wide.columns
+                        and "total_debt" in debt_wide.columns
+                        and "资产负债率" not in debt_wide.columns
+                    ):
+                        debt_wide["资产负债率"] = debt_wide["total_debt"] / debt_wide["assets_total"] * 100
+                    if (
+                        "total_current_assets" in debt_wide.columns
+                        and "current_total_debt" in debt_wide.columns
+                        and "流动比率" not in debt_wide.columns
+                    ):
+                        debt_wide["流动比率"] = debt_wide["total_current_assets"] / debt_wide["current_total_debt"]
+
+                    keep_cols = ["报告期", "资产合计", "归属于母公司所有者权益合计", "资产负债率", "流动比率"]
+                    keep_cols = [c for c in keep_cols if c in debt_wide.columns]
+                    merged = pd.merge(merged, debt_wide[keep_cols], on="报告期", how="left", suffixes=("", "_debt"))
+                    for col in ["资产负债率", "流动比率"]:
+                        debt_col = f"{col}_debt"
+                        if debt_col in merged.columns:
+                            if col in merged.columns:
+                                merged[col] = merged[col].combine_first(merged[debt_col])
+                                merged = merged.drop(columns=[debt_col])
+                            else:
+                                merged = merged.rename(columns={debt_col: col})
+
+            merged["_report_dt"] = pd.to_datetime(merged["报告期"], errors="coerce")
+            merged = merged[merged["_report_dt"].notna()].sort_values("_report_dt", ascending=True)
+            merged = merged.drop(columns=["_report_dt"]).reset_index(drop=True)
+            return merged
         try:
             df = await asyncio.to_thread(fetch_financial_indicator)
 
