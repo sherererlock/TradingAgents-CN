@@ -585,7 +585,7 @@ def get_user_selections():
             default_date,
         )
     )
-    analysis_date = get_analysis_date()
+    analysis_date = default_date
 
     # Step 4: Select analysts
     console.print(
