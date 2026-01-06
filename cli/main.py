@@ -1006,8 +1006,8 @@ def check_api_keys(llm_provider: str) -> bool:
             missing_keys.append("GOOGLE_API_KEY")
 
     # 检查金融数据API密钥
-    if not os.getenv("FINNHUB_API_KEY"):
-        missing_keys.append("FINNHUB_API_KEY (金融数据)")
+    # if not os.getenv("FINNHUB_API_KEY"):
+    #     missing_keys.append("FINNHUB_API_KEY (金融数据)")
 
     if missing_keys:
         logger.error("[red]❌ 缺少必要的API密钥 | Missing required API keys[/red]")
