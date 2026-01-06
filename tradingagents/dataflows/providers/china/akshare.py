@@ -366,6 +366,8 @@ class AKShareProvider(BaseStockDataProvider):
             # 获取股票基本信息
             stock_info = await self._get_stock_info_detail(code)
             
+            logger.info(f"原始基础信息: {stock_info}")
+
             if not stock_info:
                 logger.warning(f"⚠️ 未找到{code}的基础信息")
                 return None
@@ -424,6 +426,7 @@ class AKShareProvider(BaseStockDataProvider):
             # 方法1: 尝试获取个股详细信息（包含行业、地区等详细信息）
             def fetch_individual_info():
                 return self.ak.stock_individual_info_em(symbol=code)
+                # return self.ak.stock_individual_basic_info_xq(symbol=code)
 
             try:
                 stock_info = await asyncio.to_thread(fetch_individual_info)
@@ -432,6 +435,7 @@ class AKShareProvider(BaseStockDataProvider):
                     # 解析信息
                     info = {"code": code}
 
+                    logger.info(f"原始详细信息: {stock_info}")
                     # 提取股票名称
                     name_row = stock_info[stock_info['item'] == '股票简称']
                     if not name_row.empty:

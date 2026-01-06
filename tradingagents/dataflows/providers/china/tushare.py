@@ -1291,20 +1291,23 @@ class TushareProvider(BaseStockDataProvider):
 
     def _standardize_historical_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """标准化历史数据"""
-        # 重命名列
-        column_mapping = {
-            'trade_date': 'date',
-            'vol': 'volume'
-        }
-        df = df.rename(columns=column_mapping)
+        df = df.copy()
 
-        # 格式化日期
+        if 'trade_date' in df.columns and 'date' not in df.columns:
+            df['date'] = pd.to_datetime(df['trade_date'], format='%Y%m%d', errors='coerce')
+            df['trade_date'] = df['date'].dt.strftime('%Y-%m-%d')
+        elif 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'], errors='coerce')
+            if 'trade_date' not in df.columns:
+                df['trade_date'] = df['date'].dt.strftime('%Y-%m-%d')
+
+        if 'vol' in df.columns and 'volume' not in df.columns:
+            df = df.rename(columns={'vol': 'volume'})
+
         if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'], format='%Y%m%d')
-            df.set_index('date', inplace=True)
-
-        # 按日期排序
-        df = df.sort_index()
+            df = df.sort_values('date')
+        elif 'trade_date' in df.columns:
+            df = df.sort_values('trade_date')
 
         return df
 

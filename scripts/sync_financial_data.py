@@ -39,6 +39,62 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _build_debt_wide_from_long_df(df_long: pd.DataFrame) -> pd.DataFrame:
+    if df_long is None or getattr(df_long, "empty", True):
+        return pd.DataFrame()
+
+    if not {"report_date", "metric_name", "value"}.issubset(set(df_long.columns)):
+        return pd.DataFrame()
+
+    required_metrics = [
+        "assets_total",
+        "parent_holder_equity_total",
+        "total_debt",
+        "total_current_assets",
+        "current_total_debt",
+    ]
+
+    debt_filtered = df_long[df_long["metric_name"].isin(required_metrics)].copy()
+    if debt_filtered.empty:
+        return pd.DataFrame()
+
+    debt_filtered["value_num"] = debt_filtered["value"].apply(_parse_financial_value)
+    debt_wide = (
+        debt_filtered.pivot_table(
+            index="report_date",
+            columns="metric_name",
+            values="value_num",
+            aggfunc="first",
+        )
+        .reset_index()
+    )
+
+    for metric_col in required_metrics:
+        if metric_col in debt_wide.columns:
+            debt_wide[metric_col] = pd.to_numeric(debt_wide[metric_col], errors="coerce")
+
+    debt_wide["报告期"] = pd.to_datetime(debt_wide["report_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    debt_wide = debt_wide.drop(columns=["report_date"])
+
+    if "assets_total" in debt_wide.columns and "资产合计" not in debt_wide.columns:
+        debt_wide["资产合计"] = debt_wide["assets_total"]
+    if "parent_holder_equity_total" in debt_wide.columns and "归属于母公司所有者权益合计" not in debt_wide.columns:
+        debt_wide["归属于母公司所有者权益合计"] = debt_wide["parent_holder_equity_total"]
+
+    if "assets_total" in debt_wide.columns and "total_debt" in debt_wide.columns and "资产负债率" not in debt_wide.columns:
+        debt_wide["资产负债率"] = debt_wide["total_debt"] / debt_wide["assets_total"].replace({0: pd.NA}) * 100
+    if (
+        "total_current_assets" in debt_wide.columns
+        and "current_total_debt" in debt_wide.columns
+        and "流动比率" not in debt_wide.columns
+    ):
+        debt_wide["流动比率"] = debt_wide["total_current_assets"] / debt_wide["current_total_debt"].replace({0: pd.NA})
+
+    keep_cols = ["报告期", "资产合计", "归属于母公司所有者权益合计", "资产负债率", "流动比率"]
+    keep_cols = [c for c in keep_cols if c in debt_wide.columns]
+    return debt_wide[keep_cols].copy()
+
+
 async def sync_single_stock_financial_data(
     code: str,
     provider: AKShareProvider,
@@ -106,53 +162,9 @@ async def sync_single_stock_financial_data(
                 isinstance(df1, pd.DataFrame)
                 and {"report_date", "metric_name", "value"}.issubset(set(df1.columns))
             ):
-                required_metrics = [
-                    "assets_total",
-                    "parent_holder_equity_total",
-                    "total_debt",
-                    "total_current_assets",
-                    "current_total_debt",
-                ]
-                debt_filtered = df1[df1["metric_name"].isin(required_metrics)].copy()
-                if not debt_filtered.empty:
-                    debt_wide = (
-                        debt_filtered.pivot_table(
-                            index="report_date",
-                            columns="metric_name",
-                            values="value",
-                            aggfunc="first",
-                        )
-                        .reset_index()
-                    )
-                    debt_wide["报告期"] = pd.to_datetime(debt_wide["report_date"], errors="coerce").dt.strftime(
-                        "%Y-%m-%d"
-                    )
-                    debt_wide = debt_wide.drop(columns=["report_date"])
-
-                    if "assets_total" in debt_wide.columns and "资产合计" not in debt_wide.columns:
-                        debt_wide["资产合计"] = debt_wide["assets_total"]
-                    if (
-                        "parent_holder_equity_total" in debt_wide.columns
-                        and "归属于母公司所有者权益合计" not in debt_wide.columns
-                    ):
-                        debt_wide["归属于母公司所有者权益合计"] = debt_wide["parent_holder_equity_total"]
-
-                    if (
-                        "assets_total" in debt_wide.columns
-                        and "total_debt" in debt_wide.columns
-                        and "资产负债率" not in debt_wide.columns
-                    ):
-                        debt_wide["资产负债率"] = debt_wide["total_debt"] / debt_wide["assets_total"] * 100
-                    if (
-                        "total_current_assets" in debt_wide.columns
-                        and "current_total_debt" in debt_wide.columns
-                        and "流动比率" not in debt_wide.columns
-                    ):
-                        debt_wide["流动比率"] = debt_wide["total_current_assets"] / debt_wide["current_total_debt"]
-
-                    keep_cols = ["报告期", "资产合计", "归属于母公司所有者权益合计", "资产负债率", "流动比率"]
-                    keep_cols = [c for c in keep_cols if c in debt_wide.columns]
-                    merged = pd.merge(merged, debt_wide[keep_cols], on="报告期", how="left", suffixes=("", "_debt"))
+                debt_wide = _build_debt_wide_from_long_df(df1)
+                if not debt_wide.empty:
+                    merged = pd.merge(merged, debt_wide, on="报告期", how="left", suffixes=("", "_debt"))
                     for col in ["资产负债率", "流动比率"]:
                         debt_col = f"{col}_debt"
                         if debt_col in merged.columns:
@@ -191,9 +203,14 @@ async def sync_single_stock_financial_data(
             logger.error(f"❌ {code6} 获取财务指标失败: {e}")
             return False
 
-        net_profit = _parse_financial_value(latest.get('净利润')) / 10000  # 净利润（单期）
-        total_assets =  _parse_financial_value(latest.get('资产合计')) / 10000  # 总资产
-        revenue = _parse_financial_value(latest.get('营业总收入')) / 10000  # 营业总收入（单期）
+        net_profit_raw = _parse_financial_value(latest.get('净利润'))
+        net_profit = net_profit_raw / 10000 if net_profit_raw is not None else None
+        total_assets_raw = _parse_financial_value(latest.get('资产合计'))
+        total_assets = total_assets_raw / 10000 if total_assets_raw is not None else None
+        revenue_raw = _parse_financial_value(latest.get('营业总收入'))
+        revenue = revenue_raw / 10000 if revenue_raw is not None else None
+        total_hldr_eqy_raw = _parse_financial_value(latest.get('归属于母公司所有者权益合计'))
+        total_hldr_eqy_exc_min_int = total_hldr_eqy_raw / 10000 if total_hldr_eqy_raw is not None else None
         # 2. 解析财务数据
         financial_data = {
             "code": code6,
@@ -214,7 +231,7 @@ async def sync_single_stock_financial_data(
             "net_profit": net_profit,
             "net_profit_ttm": ttm_net_profit,  # TTM净利润（最近12个月）
             "total_assets": total_assets,
-            "total_hldr_eqy_exc_min_int": _parse_financial_value(latest.get('归属于母公司所有者权益合计')) / 10000,  # 净资产
+            "total_hldr_eqy_exc_min_int": total_hldr_eqy_exc_min_int,
 
             # 每股指标
             "basic_eps": _parse_financial_value(latest.get('基本每股收益')),  # 每股收益

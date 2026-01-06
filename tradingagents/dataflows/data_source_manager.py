@@ -1642,6 +1642,43 @@ class DataSourceManager:
         logger.error(f"❌ 所有数据源都无法获取{symbol}的股票信息")
         return {'symbol': symbol, 'name': f'股票{symbol}', 'source': 'unknown'}
 
+    def _get_tushare_stock_info(self, symbol: str) -> Dict:
+        """使用Tushare获取股票基本信息（直接调用provider，避免循环调用）"""
+        try:
+            provider = self._get_tushare_adapter()
+            if not provider or not hasattr(provider, "is_available") or not provider.is_available():
+                return {
+                    "symbol": symbol,
+                    "name": f"股票{symbol}",
+                    "source": "tushare",
+                    "error": "Tushare提供器不可用或未连接",
+                }
+
+            info = self._run_async_blocking(provider.get_stock_basic_info(symbol))
+            if not info:
+                return {
+                    "symbol": symbol,
+                    "name": f"股票{symbol}",
+                    "source": "tushare",
+                    "error": "Tushare未返回股票信息",
+                }
+
+            if isinstance(info, dict):
+                normalized = dict(info)
+                normalized.setdefault("symbol", symbol)
+                normalized.setdefault("source", "tushare")
+                return normalized
+
+            return {
+                "symbol": symbol,
+                "name": f"股票{symbol}",
+                "source": "tushare",
+                "error": f"Tushare返回类型异常: {type(info)}",
+            }
+        except Exception as e:
+            logger.error(f"❌ [股票信息] Tushare获取失败: {symbol}, 错误: {e}")
+            return {"symbol": symbol, "name": f"股票{symbol}", "source": "tushare", "error": str(e)}
+
     def _get_akshare_stock_info(self, symbol: str) -> Dict:
         """使用AKShare获取股票基本信息
 

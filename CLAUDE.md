@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**TradingAgents-CN** is a Chinese-enhanced multi-agent stock analysis platform using AI/LLMs for educational and research purposes. Based on [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents), this version adds comprehensive Chinese localization, A-share market support, and modern web architecture.
+**TradingAgents-CN** is a Chinese-enhanced multi-agent stock analysis platform using AI/LLMs for educational and research purposes. Based on [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents), this version adds comprehensive Chinese localization, A-share market support, and modern web architecture (FastAPI + Vue 3).
 
 ### Important Notes
 - **Educational/Research Only**: Not for live trading - analysis platform for learning
-- **Mixed Licensing**: Core is Apache 2.0, but `app/` (FastAPI backend) and `frontend/` (Vue frontend) are proprietary
-- **Data Required**: Stock data must be synchronized before analysis (use Tushare/AkShare/BaoStock)
+- **Mixed Licensing**: Core analysis engine (`tradingagents/`) is Apache 2.0, but `app/` (FastAPI backend) and `frontend/` (Vue frontend) are proprietary - commercial use requires separate licensing
+- **Data Required**: Stock data must be synchronized before analysis (use Tushare/AkShare/BaoStock via CLI or web UI)
+- **Version**: v1.0.0-preview represents a major architectural upgrade from Streamlit to FastAPI + Vue 3
 
 ## Common Commands
 
@@ -35,7 +36,7 @@ pytest tests/test_analysis.py
 ```bash
 cd frontend
 
-# Install dependencies
+# Install dependencies (requires Node.js >= 18.0.0)
 npm install
 
 # Run development server
@@ -64,6 +65,9 @@ docker-compose build --no-cache
 
 # View logs
 docker-compose logs -f backend
+
+# Stop all services
+docker-compose down
 ```
 
 ### Core Analysis Usage
@@ -160,9 +164,15 @@ User Request
    - L1: Redis (fast, optional)
    - L2: MongoDB (persistent, optional)
    - L3: File cache (fallback)
-   - Configurable via `CACHE_TYPE` env variable
+   - Automatic fallback when higher levels unavailable
+   - Configured via `TA_CACHE_STRATEGY` env variable (integrated/file/adaptive)
 
-5. **Configuration Management**:
+5. **Real-time Notification System**:
+   - **SSE (Server-Sent Events)**: Progress updates during analysis
+   - **WebSocket**: For future real-time bidirectional communication
+   - Enables live progress tracking in the Vue 3 frontend
+
+6. **Configuration Management**:
    - `config_manager.py`: YAML-based config
    - `mongodb_storage.py`: Database-backed settings (for web UI)
    - `runtime_settings.py`: In-memory runtime config
@@ -206,6 +216,9 @@ Data providers require API keys:
 - **Unit Tests**: `tests/` directory, run with `pytest` (excludes integration by default)
 - **Integration Tests**: Marked with `@pytest.mark.integration`, run with `pytest -m integration`
 - **Test Configuration**: `tests/pytest.ini` configures test discovery and markers
+  - Default: `pytest` runs unit tests only (skips integration)
+  - Integration: `pytest -m integration` runs integration tests
+  - Specific: `pytest tests/test_analysis.py` runs a single test file
 - **Scripts**: Many `test_*.py` files in `scripts/` are development/debugging scripts, not formal tests
 
 ## Environment Variables
@@ -213,26 +226,38 @@ Data providers require API keys:
 Key environment variables (see `.env.example`):
 
 ```bash
-# Database
+# Database (required for web UI)
 TRADINGAGENTS_MONGODB_URL=mongodb://localhost:27017/tradingagents
 TRADINGAGENTS_REDIS_URL=redis://localhost:6379
-TRADINGAGENTS_CACHE_TYPE=redis  # or mongodb, file
+TA_CACHE_STRATEGY=integrated  # or file, adaptive
 
-# LLM Providers
+# LLM Providers (at least one required)
 GOOGLE_API_KEY=your_key_here
 DEEPSEEK_API_KEY=your_key_here
 DASHSCOPE_API_KEY=your_key_here
 OPENAI_API_KEY=your_key_here
 
-# Data Sources
+# Data Sources (for Chinese stocks)
+DEFAULT_CHINA_DATA_SOURCE=akshare  # or tushare, baostock
 TUSHARE_TOKEN=your_token_here
 AKSHARE_TOKEN=optional
 BAOSTOCK_TOKEN=optional
 
 # API Configuration
-API_HOST=0.0.0.0
-API_PORT=8000
+HOST=0.0.0.0
+PORT=8000
+DEBUG=true
 CORS_ORIGINS=http://localhost:3000
+
+# Security (required for web UI)
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+CSRF_SECRET=your-csrf-secret-key-change-in-production
+
+# Proxy Configuration (optional)
+# If using proxy for international services, configure NO_PROXY for domestic sources
+HTTP_PROXY=http://127.0.0.1:7890
+HTTPS_PROXY=http://127.0.0.1:7890
+NO_PROXY=localhost,127.0.0.1,eastmoney.com,api.tushare.pro
 ```
 
 ## Development Guidelines
@@ -249,6 +274,13 @@ The project has had issues with asyncio event loop conflicts. When working with 
 - Avoid mixing sync and async contexts
 - The `unified_news_tool` uses thread pools to avoid blocking
 
+### Proxy Configuration for International LLM Access
+When using international LLM providers (OpenAI, Google AI) from China:
+- Configure `HTTP_PROXY` and `HTTPS_PROXY` for international access
+- **Important**: Set `NO_PROXY` to bypass proxy for domestic data sources
+- Domestic domains to exclude: `eastmoney.com`, `api.tushare.pro`, `baostock.com`
+- See `.env.example` for detailed NO_PROXY configuration
+
 ### Chinese Market Specifics
 - Stock codes: 6-digit for A-shares (e.g., "600000"), 5-digit for HK (e.g., "00700")
 - Market types: `stock_utils.MarketType.SHANGHAI`, `SHENZHEN`, `HONG_KONG`, `US`
@@ -264,6 +296,7 @@ The project has had issues with asyncio event loop conflicts. When working with 
 
 ## Important Files to Reference
 
+### Core Analysis Engine
 - **Main entry point**: `main.py` (example usage)
 - **Graph orchestration**: `tradingagents/graph/trading_graph.py`
 - **Agent states**: `tradingagents/agents/utils/agent_states.py`
@@ -272,8 +305,94 @@ The project has had issues with asyncio event loop conflicts. When working with 
 - **Data providers**: `tradingagents/dataflows/providers/`
 - **Configuration**: `tradingagents/config/config_manager.py`
 
+### Backend API (Proprietary)
+- **FastAPI app**: `app/main.py`
+- **API routes**: `app/api/`
+- **Configuration**: `app/core/config.py`
+- **Database models**: `app/models/`
+
+### Frontend (Proprietary)
+- **Vue app**: `frontend/src/main.ts`
+- **Components**: `frontend/src/components/`
+- **Views**: `frontend/src/views/`
+- **API client**: `frontend/src/api/`
+
+## Key Architectural Decisions
+
+### Why FastAPI + Vue 3?
+The v1.0.0-preview upgrade from Streamlit to FastAPI + Vue 3 provides:
+- **Better separation of concerns**: Backend (API) and frontend (UI) are decoupled
+- **Improved performance**: Async request handling, multi-level caching
+- **Enhanced UX**: Real-time progress updates via SSE, modern SPA interface
+- **Enterprise features**: User authentication, role management, batch analysis
+- **Scalability**: Stateless API, horizontal scaling ready
+
+### Multi-Tier Architecture
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
+│   Vue 3     │ ←→  │   FastAPI    │ ←→  │ TradingAgents   │
+│  Frontend   │ SSE │   Backend    │     │  Core Engine    │
+│ (Proprietary)│     │(Proprietary)  │     │  (Apache 2.0)   │
+└─────────────┘     └──────────────┘     └─────────────────┘
+                           │                       │
+                           ↓                       ↓
+                    ┌──────────────┐     ┌─────────────────┐
+                    │  MongoDB +   │     │  Data Providers │
+                    │   Redis      │     │ (Tushare, etc.) │
+                    └──────────────┘     └─────────────────┘
+```
+
 ## License Notes
 
-- Apache 2.0: Everything except `app/` and `frontend/`
-- Commercial use of `app/` and `frontend/` requires separate licensing
-- Core analysis engine can be used freely under Apache 2.0
+**Mixed License Model**:
+- **Apache 2.0** (Open Source): `tradingagents/` core analysis engine
+  - Free to use, modify, and distribute
+  - Commercial use allowed
+  - Must include original license and copyright notice
+
+- **Proprietary**: `app/` (FastAPI backend) and `frontend/` (Vue frontend)
+  - Source code available for reference
+  - Personal/educational use allowed
+  - **Commercial use requires separate licensing**
+  - Contact: hsliup@163.com
+
+**Development Guidelines**:
+- Keep core analysis logic in `tradingagents/` (Apache 2.0)
+- Web-specific code goes in `app/` and `frontend/` (proprietary)
+- Contributions to `tradingagents/` are welcome under Apache 2.0
+
+## Common Development Workflows
+
+### Adding a New LLM Provider
+1. Create adapter class in `tradingagents/llm_adapters/`
+2. Implement OpenAI-compatible interface (`base_url`, `api_key`, etc.)
+3. Add to `create_llm_by_provider()` factory in `trading_graph.py`
+4. Update `.env.example` with new provider's environment variables
+5. Add configuration to web UI's LLM provider management (`app/api/llm.py`)
+
+### Adding a New Data Provider
+1. Create provider class in `tradingagents/dataflows/providers/`
+2. Inherit from `BaseProvider` and implement required methods
+3. Register in provider factory or configuration
+4. Add environment variables for API keys/tokens
+5. Update documentation with data source specifics
+
+### Debugging Analysis Issues
+1. Enable debug mode: `config["debug"] = True`
+2. Check logs in `logs/tradingagents.log`
+3. Verify data synchronization: `tradingagents sync <ticker>`
+4. Test individual analysts via `main.py`
+5. Review LangGraph execution trace for agent outputs
+6. Check cache hit rates: set `TA_CACHE_STRATEGY=file` to bypass database cache
+
+### Testing Web API Endpoints
+```bash
+# Start backend server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Access auto-generated API docs
+open http://localhost:8000/docs
+
+# Test health endpoint
+curl http://localhost:8000/api/health
+```
