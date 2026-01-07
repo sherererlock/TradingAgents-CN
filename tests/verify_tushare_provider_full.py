@@ -48,7 +48,7 @@ async def verify_tushare_provider():
     else:
         print("❌ 获取股票列表失败或为空")
 
-    test_code = "000001"
+    test_code = "600089"
     print(f"\n3️⃣ 验证 get_stock_basic_info('{test_code}')...")
     basic_info = await provider.get_stock_basic_info(test_code)
     if basic_info:
