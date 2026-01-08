@@ -34,29 +34,48 @@ def test_calculate_realtime_pe_pb_with_mock_data(monkeypatch):
     """测试实时PE/PB计算（使用mock数据）"""
     # Mock MongoDB数据
     class MockCollection:
-        def find_one(self, query):
+        def __init__(self, name: str):
+            self._name = name
+
+        def find_one(self, query, **kwargs):
             code = query.get("code")
-            if code == "000001":
-                if "market_quotes" in str(self):
-                    # 返回实时行情
-                    return {
-                        "code": "000001",
-                        "close": 10.5,
-                        "updated_at": "2025-10-14T10:30:00"
-                    }
-                else:
-                    # 返回基础信息
-                    return {
-                        "code": "000001",
-                        "total_share": 100000,  # 10万万股 = 10亿股
-                        "net_profit": 50000,    # 5万万元 = 5亿元
-                        "total_hldr_eqy_exc_min_int": 200000  # 20万万元 = 20亿元
-                    }
+            if code != "000001":
+                return None
+
+            if self._name == "market_quotes":
+                return {
+                    "code": "000001",
+                    "close": 10.5,
+                    "pre_close": 10.0,
+                    "updated_at": "2025-10-14T10:30:00",
+                }
+
+            if self._name == "stock_basic_info":
+                return {
+                    "code": "000001",
+                    "source": "tushare",
+                    "pe_ttm": 20.0,
+                    "pe": 20.0,
+                    "pb": 3.0,
+                    "total_share": 100000,
+                    "total_mv": 100.0,
+                    "updated_at": None,
+                }
+
+            if self._name == "stock_financial_data":
+                return {
+                    "code": "000001",
+                    "report_period": "20250930",
+                    "total_equity": 2000000000,
+                }
+
             return None
     
     class MockDB:
-        def __getitem__(self, name):
-            return MockCollection()
+        def __init__(self):
+            self.market_quotes = MockCollection("market_quotes")
+            self.stock_basic_info = MockCollection("stock_basic_info")
+            self.stock_financial_data = MockCollection("stock_financial_data")
     
     class MockClient:
         def __getitem__(self, name):
@@ -69,7 +88,7 @@ def test_calculate_realtime_pe_pb_with_mock_data(monkeypatch):
     assert result is not None
     assert result["price"] == 10.5
     assert result["is_realtime"] == True
-    assert result["source"] == "realtime_calculated"
+    assert result["source"] == "realtime_calculated_from_market_quotes"
     
     # 验证PE计算：市值 = 10.5 * 100000 = 1050000万元，PE = 1050000 / 50000 = 21
     assert result["pe"] == 21.0
@@ -81,12 +100,14 @@ def test_calculate_realtime_pe_pb_with_mock_data(monkeypatch):
 def test_calculate_realtime_pe_pb_missing_data(monkeypatch):
     """测试缺少数据时的处理"""
     class MockCollection:
-        def find_one(self, query):
+        def find_one(self, query, **kwargs):
             return None
     
     class MockDB:
-        def __getitem__(self, name):
-            return MockCollection()
+        def __init__(self):
+            self.market_quotes = MockCollection()
+            self.stock_basic_info = MockCollection()
+            self.stock_financial_data = MockCollection()
     
     class MockClient:
         def __getitem__(self, name):
@@ -116,8 +137,11 @@ def test_get_pe_pb_with_fallback_success(monkeypatch):
     import tradingagents.dataflows.realtime_metrics as metrics_module
     monkeypatch.setattr(metrics_module, "calculate_realtime_pe_pb", mock_calculate)
     
-    # 执行测试
-    result = get_pe_pb_with_fallback("000001", None)
+    class MockClient:
+        def __getitem__(self, name):
+            raise AssertionError("should not access DB in success path")
+
+    result = get_pe_pb_with_fallback("000001", MockClient())
     
     # 验证结果
     assert result["pe"] == 22.5
@@ -133,7 +157,7 @@ def test_get_pe_pb_with_fallback_to_static(monkeypatch):
     
     # Mock静态数据获取
     class MockCollection:
-        def find_one(self, query):
+        def find_one(self, query, **kwargs):
             return {
                 "code": "000001",
                 "pe": 20.0,
@@ -144,8 +168,8 @@ def test_get_pe_pb_with_fallback_to_static(monkeypatch):
             }
     
     class MockDB:
-        def __getitem__(self, name):
-            return MockCollection()
+        def __init__(self):
+            self.stock_basic_info = MockCollection()
     
     class MockClient:
         def __getitem__(self, name):
@@ -166,4 +190,3 @@ def test_get_pe_pb_with_fallback_to_static(monkeypatch):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
