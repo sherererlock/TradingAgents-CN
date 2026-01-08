@@ -516,6 +516,27 @@ def update_display(layout, spinner_text=None):
 
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
+def get_user_selections_fake():
+    """Return fake user selections for testing."""
+    return {
+        "ticker": "600160",
+        "market": {
+            "name": "A股",
+            "name_en": "China A-Share",
+            "default": "600036",
+            "examples": ["000001 (平安银行)", "600036 (招商银行)", "000858 (五粮液)"],
+            "format": "6位数字代码 (如: 600036, 000001)",
+            "pattern": r"^\d{6}$",
+            "data_source": "china_stock",
+        },
+        "analysis_date": "2026-01-08",
+        "analysts": [AnalystType.FUNDAMENTALS],
+        "research_depth": 1,
+        "llm_provider": "阿里百炼 (dashscope)",
+        "backend_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "shallow_thinker": "qwen-max",
+        "deep_thinker": "qwen-max",
+    }
 
 def get_user_selections():
     """Get all user selections before starting the analysis display."""
@@ -1030,7 +1051,10 @@ def run_analysis():
     start_time = time.time()  # 记录开始时间
     
     # First get all user selections
-    selections = get_user_selections()
+    selections = get_user_selections_fake()
+
+
+    logger.info(f"用户选择 | User Selections: {selections}")
 
     # Check API keys before proceeding
     if not check_api_keys(selections["llm_provider"]):
@@ -1073,6 +1097,8 @@ def run_analysis():
 
     # Initialize the graph
     ui.show_progress("正在初始化分析系统...")
+
+    logger.info(f"配置 | Config: {config}")
     try:
         graph = TradingAgentsGraph(
             [analyst.value for analyst in selections["analysts"]], config=config, debug=True

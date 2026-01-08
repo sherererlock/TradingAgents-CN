@@ -163,8 +163,8 @@ class DataSourceManager:
         # 🔥 回退到默认顺序（兼容性）
         # 默认顺序：AKShare > Tushare > BaoStock
         default_order = [
-            ChinaDataSource.AKSHARE,
             ChinaDataSource.TUSHARE,
+            ChinaDataSource.AKSHARE,
             ChinaDataSource.BAOSTOCK,
         ]
         # 只返回可用的数据源
