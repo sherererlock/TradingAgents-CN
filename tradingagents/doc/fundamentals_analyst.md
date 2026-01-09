@@ -49,6 +49,42 @@ graph TD
     ManualGen --> End
 ```
 
+## 工具调用顺序（按实际执行先后）
+
+> 这里的“工具”同时包含：节点内部为了补全上下文而调用的数据源函数，以及对大模型暴露的 LangChain Tool。实际执行过程中会因市场类型、模型类型（Google/非 Google）与是否触发回退而略有差异。
+
+### 1. 市场识别（非 LangChain Tool）
+1. `StockUtils.get_market_info(ticker)`：识别股票所属市场（A股/港股/美股）与币种信息。
+
+### 2. 公司名称获取（非 LangChain Tool，按市场分支）
+1. A 股（`market_info['is_china'] == True`）：
+   1. `tradingagents.dataflows.interface.get_china_stock_info_unified(ticker)`：获取股票信息字符串，并尝试解析 `股票名称:`。
+   2. 降级（仅当上一步无法解析名称时）：`tradingagents.dataflows.data_source_manager.get_china_stock_info_unified(ticker)`：返回字典并读取 `name` 字段。
+2. 港股（`market_info['is_hk'] == True`）：
+   1. `tradingagents.dataflows.providers.hk.improved_hk.get_hk_company_name_improved(ticker)`：获取港股公司名称。
+3. 美股（`market_info['is_us'] == True`）：
+   1. 使用内置静态映射（如 AAPL/TSLA/NVDA 等），不调用外部数据源。
+
+### 3. 基本面数据获取（唯一绑定的 LangChain Tool）
+1. `toolkit.get_stock_fundamentals_unified`（工具名：`get_stock_fundamentals_unified`）：
+   - 入参：`ticker`, `start_date`, `end_date`, `curr_date`。
+   - 说明：该工具内部会自动识别 A 股/港股/美股并选择对应数据源，目标是“一次调用返回分析所需的全部数据”。
+
+### 4. 工具调用的执行位置（按模型/流程分支）
+1. Google 模型（Gemini）分支：
+   1. 节点仍然只绑定 `get_stock_fundamentals_unified`。
+   2. 由 `GoogleToolCallHandler.handle_google_tool_calls(...)` 统一完成：解析 tool call → 执行工具 → 组织消息 → 生成最终报告。
+2. 非 Google 模型标准流程：
+   1. 第一次进入节点：LLM 生成 `tool_calls`（请求调用 `get_stock_fundamentals_unified`），节点直接返回该 `AIMessage`。
+   2. 由外部图引擎（LangGraph）执行 `get_stock_fundamentals_unified`，并把结果以 `ToolMessage` 形式写回消息历史。
+   3. 下一轮再次进入节点：LLM 基于 `ToolMessage` 生成基本面报告（正常情况下不再产生新的 tool call）。
+3. 回退（强制工具调用）：
+   1. 触发条件：LLM 没有产生 `tool_calls`，且消息历史里没有 `ToolMessage`，同时 LLM 输出内容不足 500 字（被视为“没有有效分析”）。
+   2. 节点在 Python 端直接执行一次 `get_stock_fundamentals_unified.invoke(...)` 获取数据，再调用 LLM 生成报告。
+4. 死循环防护（强制生成报告，不再调用工具）：
+   1. 触发条件：消息历史已存在 `ToolMessage`（说明工具已执行），但 LLM 仍返回新的 `tool_calls`。
+   2. 处理方式：构造不绑定工具的强制提示词，再调用 LLM 生成报告，避免重复工具调用。
+
 ## 详细逻辑说明
 
 ### 1. 初始化与模型适配

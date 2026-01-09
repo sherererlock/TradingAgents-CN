@@ -206,8 +206,8 @@ class DataSourceManager:
     def _get_default_source(self) -> ChinaDataSource:
         """获取默认数据源"""
         # 如果启用MongoDB缓存，MongoDB作为最高优先级数据源
-        if self.use_mongodb_cache:
-            return ChinaDataSource.MONGODB
+        # if self.use_mongodb_cache:
+        #     return ChinaDataSource.MONGODB
 
         # 从环境变量获取，默认使用AKShare作为第一优先级数据源
         env_source = os.getenv('DEFAULT_CHINA_DATA_SOURCE', DataSourceCode.AKSHARE).lower()

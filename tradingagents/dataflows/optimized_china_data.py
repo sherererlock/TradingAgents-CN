@@ -18,7 +18,8 @@ from tradingagents.config.runtime_settings import get_float, get_timezone_name
 # 导入日志模块
 from tradingagents.utils.logging_manager import get_logger
 logger = get_logger('agents')
-
+import logging
+logger.setLevel(logging.DEBUG)
 # 导入 MongoDB 缓存适配器
 from .cache.mongodb_cache_adapter import get_mongodb_cache_adapter, get_stock_data_with_fallback, get_financial_data_with_fallback
 
@@ -377,7 +378,7 @@ class OptimizedChinaDataProvider:
             logger.debug(f"🔍 [股票代码追踪] 读取market_quotes失败（忽略）: {_qe}")
 
         # 然后从股票数据中提取价格信息
-        if "股票名称:" in stock_data:
+        if len(stock_data) > 0:
             lines = stock_data.split('\n')
             for line in lines:
                 if "股票名称:" in line and company_name == "未知公司":
@@ -896,63 +897,63 @@ class OptimizedChinaDataProvider:
             else:
                 logger.info(f"⚠️ MongoDB 不可用，使用传入价格: {price_value}元")
 
-            # 第一优先级：从 MongoDB stock_financial_data 集合获取标准化财务数据
-            from tradingagents.config.runtime_settings import use_app_cache_enabled
-            if use_app_cache_enabled(False):
-                logger.info(f"🔍 优先从 MongoDB stock_financial_data 集合获取{symbol}财务数据")
+            # # 第一优先级：从 MongoDB stock_financial_data 集合获取标准化财务数据
+            # from tradingagents.config.runtime_settings import use_app_cache_enabled
+            # if use_app_cache_enabled(False):
+            #     logger.info(f"🔍 优先从 MongoDB stock_financial_data 集合获取{symbol}财务数据")
 
-                # 直接从 MongoDB 获取标准化的财务数据
-                from tradingagents.dataflows.cache.mongodb_cache_adapter import get_mongodb_cache_adapter
-                adapter = get_mongodb_cache_adapter()
-                financial_data = adapter.get_financial_data(symbol)
+            #     # 直接从 MongoDB 获取标准化的财务数据
+            #     from tradingagents.dataflows.cache.mongodb_cache_adapter import get_mongodb_cache_adapter
+            #     adapter = get_mongodb_cache_adapter()
+            #     financial_data = adapter.get_financial_data(symbol)
 
-                if financial_data:
-                    logger.info(f"✅ [财务数据] 从 stock_financial_data 集合获取{symbol}财务数据")
-                    # 解析 MongoDB 标准化的财务数据
-                    metrics = self._parse_mongodb_financial_data(financial_data, price_value)
-                    if metrics:
-                        logger.info(f"✅ MongoDB 财务数据解析成功，返回指标")
-                        return metrics
-                    else:
-                        logger.warning(f"⚠️ MongoDB 财务数据解析失败")
-                else:
-                    logger.info(f"🔄 MongoDB 未找到{symbol}财务数据，尝试从 AKShare API 获取")
-            else:
-                logger.info(f"🔄 数据库缓存未启用，直接从AKShare API获取{symbol}财务数据")
+            #     if financial_data:
+            #         logger.info(f"✅ [财务数据] 从 stock_financial_data 集合获取{symbol}财务数据")
+            #         # 解析 MongoDB 标准化的财务数据
+            #         metrics = self._parse_mongodb_financial_data(financial_data, price_value)
+            #         if metrics:
+            #             logger.info(f"✅ MongoDB 财务数据解析成功，返回指标")
+            #             return metrics
+            #         else:
+            #             logger.warning(f"⚠️ MongoDB 财务数据解析失败")
+            #     else:
+            #         logger.info(f"🔄 MongoDB 未找到{symbol}财务数据，尝试从 AKShare API 获取")
+            # else:
+            #     logger.info(f"🔄 数据库缓存未启用，直接从AKShare API获取{symbol}财务数据")
 
-            # 第二优先级：从AKShare API获取
-            from .providers.china.akshare import get_akshare_provider
+            # # 第二优先级：从AKShare API获取
+            # from .providers.china.akshare import get_akshare_provider
 
-            akshare_provider = get_akshare_provider()
+            # akshare_provider = get_akshare_provider()
 
-            if akshare_provider.connected:
-                async def _fetch_akshare():
-                    fin = await akshare_provider.get_financial_data(symbol)
-                    if fin and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in fin.values()):
-                        info = await akshare_provider.get_stock_basic_info(symbol)
-                        return fin, info
-                    return fin, None
+            # if akshare_provider.connected:
+            #     async def _fetch_akshare():
+            #         fin = await akshare_provider.get_financial_data(symbol)
+            #         if fin and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in fin.values()):
+            #             info = await akshare_provider.get_stock_basic_info(symbol)
+            #             return fin, info
+            #         return fin, None
 
-                financial_data, stock_info = self._run_async_blocking(_fetch_akshare())
+            #     financial_data, stock_info = self._run_async_blocking(_fetch_akshare())
 
-                if financial_data and stock_info and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in financial_data.values()):
-                    logger.info(f"✅ AKShare财务数据获取成功: {symbol}")
+            #     if financial_data and stock_info and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in financial_data.values()):
+            #         logger.info(f"✅ AKShare财务数据获取成功: {symbol}")
 
-                    # 解析AKShare财务数据
-                    logger.debug(f"🔧 调用AKShare解析函数，股价: {price_value}")
-                    metrics = self._parse_akshare_financial_data(financial_data, stock_info, price_value)
-                    logger.debug(f"🔧 AKShare解析结果: {metrics}")
-                    if metrics:
-                        logger.info(f"✅ AKShare解析成功，返回指标")
-                        # 缓存原始财务数据到数据库（而不是解析后的指标）
-                        self._cache_raw_financial_data(symbol, financial_data, stock_info)
-                        return metrics
-                    else:
-                        logger.warning(f"⚠️ AKShare解析失败，返回None")
-                else:
-                    logger.warning(f"⚠️ AKShare未获取到{symbol}财务数据，尝试Tushare")
-            else:
-                logger.warning(f"⚠️ AKShare未连接，尝试Tushare")
+            #         # 解析AKShare财务数据
+            #         logger.debug(f"🔧 调用AKShare解析函数，股价: {price_value}")
+            #         metrics = self._parse_akshare_financial_data(financial_data, stock_info, price_value)
+            #         logger.debug(f"🔧 AKShare解析结果: {metrics}")
+            #         if metrics:
+            #             logger.info(f"✅ AKShare解析成功，返回指标")
+            #             # 缓存原始财务数据到数据库（而不是解析后的指标）
+            #             self._cache_raw_financial_data(symbol, financial_data, stock_info)
+            #             return metrics
+            #         else:
+            #             logger.warning(f"⚠️ AKShare解析失败，返回None")
+            #     else:
+            #         logger.warning(f"⚠️ AKShare未获取到{symbol}财务数据，尝试Tushare")
+            # else:
+            #     logger.warning(f"⚠️ AKShare未连接，尝试Tushare")
 
             # 第三优先级：使用Tushare数据源
             logger.info(f"🔄 使用Tushare备用数据源获取{symbol}财务数据")
@@ -1735,10 +1736,22 @@ class OptimizedChinaDataProvider:
         """解析财务数据为指标"""
         try:
             # 获取最新的财务数据
-            balance_sheet = financial_data.get('balance_sheet', [])
-            income_statement = financial_data.get('income_statement', [])
-            cash_flow = financial_data.get('cash_flow', [])
-
+            raw_data = financial_data.get('raw_data')
+            if isinstance(raw_data, dict):
+                balance_sheet = raw_data.get('balance_sheet') or financial_data.get('balance_sheet') or []
+                income_statement = raw_data.get('income_statement') or financial_data.get('income_statement') or []
+                cash_flow = (
+                    financial_data.get('cash_flow')
+                    or raw_data.get('cash_flow')
+                    or raw_data.get('cashflow_statement')
+                    or financial_data.get('cashflow_statement')
+                    or []
+                )
+            else:
+                balance_sheet = financial_data.get('balance_sheet', [])
+                income_statement = financial_data.get('income_statement', [])
+                cash_flow = financial_data.get('cash_flow') or financial_data.get('cashflow_statement') or []
+  
             if not (balance_sheet or income_statement):
                 return None
 
