@@ -18,8 +18,7 @@ from tradingagents.config.runtime_settings import get_float, get_timezone_name
 # 导入日志模块
 from tradingagents.utils.logging_manager import get_logger
 logger = get_logger('agents')
-import logging
-logger.setLevel(logging.DEBUG)
+
 # 导入 MongoDB 缓存适配器
 from .cache.mongodb_cache_adapter import get_mongodb_cache_adapter, get_stock_data_with_fallback, get_financial_data_with_fallback
 
@@ -1870,9 +1869,6 @@ class OptimizedChinaDataProvider:
             revenue_type = "TTM" if ttm_revenue else "单期"
             profit_type = "TTM" if ttm_net_income else "单期"
 
-            logger.info(f"✅ -----------stock_info 数据-----------")
-            logger.info(f"{daily_basic_info}")
-            
             total_mv_wan = daily_basic_info.get("total_mv") if daily_basic_info else None
             total_share = daily_basic_info.get("total_share") if daily_basic_info else None
             try:
