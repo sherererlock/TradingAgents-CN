@@ -1442,7 +1442,7 @@ def get_china_stock_data_tushare(
 
 def get_china_stock_info_tushare(
     ticker: Annotated[str, "中国股票代码，如：000001、600036等"]
-) -> str:
+) -> dict:
     """
     使用Tushare获取中国A股基本信息
     直接调用 Tushare 适配器，避免循环调用
@@ -1466,19 +1466,17 @@ def get_china_stock_info_tushare(
         # 不要调用 get_stock_info()，因为它会再次调用 get_china_stock_info_tushare()
         info = manager._get_tushare_stock_info(ticker)
 
+        logger.info(f"🔍 [股票代码追踪] Tushare 返回的股票信息: {info}")
+        
         # 格式化返回字符串
         if info and isinstance(info, dict):
-            return f"""股票代码: {info.get('symbol', ticker)}
-股票名称: {info.get('name', '未知')}
-所属行业: {info.get('industry', '未知')}
-上市日期: {info.get('list_date', '未知')}
-交易所: {info.get('exchange', '未知')}"""
+            return info
         else:
-            return f"❌ 未找到{ticker}的股票信息"
+            return None
 
     except Exception as e:
         logger.error(f"❌ [Tushare] 获取股票信息失败: {e}")
-        return f"❌ 获取{ticker}股票信息失败: {e}"
+        return None
 
 
 def get_china_stock_fundamentals_tushare(

@@ -1500,8 +1500,11 @@ class DataSourceManager:
         try:
             if self.current_source == ChinaDataSource.TUSHARE:
                 from .interface import get_china_stock_info_tushare
-                info_str = get_china_stock_info_tushare(symbol)
-                result = self._parse_stock_info_string(info_str, symbol)
+                info = get_china_stock_info_tushare(symbol)
+                if info is None:
+                    return self._try_fallback_stock_info(symbol)
+
+                result = info
 
                 # 检查是否获取到有效信息
                 if result.get('name') and result['name'] != f'股票{symbol}':
