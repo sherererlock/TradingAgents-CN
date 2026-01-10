@@ -363,6 +363,9 @@ def _calculate_ttm_metric(df, metric_name: str) -> Optional[float]:
     Returns:
         TTM 指标值（万元），如果无法计算则返回 None
     """
+    logger.info(f"数据：----------------- ")
+    logger.info(f"{df}")
+
     try:
         if df is None or df.empty or len(df) < 1:
             return None
@@ -371,15 +374,33 @@ def _calculate_ttm_metric(df, metric_name: str) -> Optional[float]:
         if '报告期' not in df.columns or metric_name not in df.columns:
             return None
 
-        # 获取最新一期
-        latest = df.iloc[-1]
-        latest_period = str(latest['报告期'])
+        def _normalize_report_period(value) -> Optional[str]:
+            if value is None:
+                return None
+            s = str(value).strip()
+            if not s or s.lower() in {"nan", "none", "null", "--"}:
+                return None
+            if "-" in s:
+                s = s.replace("-", "")
+            if len(s) != 8 or not s.isdigit():
+                return None
+            return s
+
+        df_local = df.copy()
+        df_local["_period_norm"] = df_local["报告期"].apply(_normalize_report_period)
+        df_local = df_local[df_local["_period_norm"].notna()]
+        if df_local.empty:
+            return None
+        df_local = df_local.sort_values("_period_norm")
+
+        latest = df_local.iloc[-1]
+        latest_period = str(latest["_period_norm"])
         latest_value = _parse_financial_value(latest[metric_name])
 
         if latest_value is None:
             return None
-        # 判断最新期是否是年报（报告期以12-31结尾）
-        if latest_period.endswith('12-31'):
+
+        if latest_period.endswith("1231"):
             latest_value /= 10000 # 万元
             logger.debug(f"   使用年报{metric_name}作为TTM: {latest_value:.2f} 万元")
             return latest_value
@@ -388,20 +409,20 @@ def _calculate_ttm_metric(df, metric_name: str) -> Optional[float]:
         # 提取年份和月份
         try:
             year = int(latest_period[:4])
-            month_day = latest_period[5:]
+            month_day = latest_period[4:8]
         except:
             return None
 
         # 查找最近的年报（上一年的12-31）
         last_year = year - 1
-        last_annual_period = f"{last_year}-12-31"
+        last_annual_period = f"{last_year}1231"
 
         # 查找去年同期
-        last_same_period = f"{last_year}-{month_day}"
+        last_same_period = f"{last_year}{month_day}"
 
         # 在 DataFrame 中查找
-        last_annual_row = df[df['报告期'] == last_annual_period]
-        last_same_row = df[df['报告期'] == last_same_period]
+        last_annual_row = df_local[df_local["_period_norm"] == last_annual_period]
+        last_same_row = df_local[df_local["_period_norm"] == last_same_period]
 
         if not last_annual_row.empty and not last_same_row.empty:
             last_annual_value = _parse_financial_value(last_annual_row.iloc[0][metric_name])

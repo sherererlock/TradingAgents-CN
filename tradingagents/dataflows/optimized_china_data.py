@@ -968,16 +968,23 @@ class OptimizedChinaDataProvider:
                 fin = await provider.get_financial_data(symbol)
                 if not fin:
                     return fin, None
-                info = await provider.get_stock_basic_info(symbol)
-                return fin, info
+                basic_info = await provider.get_stock_basic_info(symbol)
 
-            financial_data, stock_info = self._run_async_blocking(_fetch_tushare())
+                trade_date = await provider.find_latest_trade_date()
+                if trade_date:
+                    trade_date = trade_date.replace("-", "")
+
+                daily_basic_info = await provider.get_daily_basic(symbol, trade_date)
+
+                return fin, basic_info, daily_basic_info
+
+            financial_data, stock_info, daily_basic_info = self._run_async_blocking(_fetch_tushare())
             if not financial_data:
                 logger.debug(f"未获取到{symbol}的财务数据")
                 return None
 
             # 解析Tushare财务数据
-            metrics = self._parse_financial_data(financial_data, stock_info, price_value)
+            metrics = self._parse_financial_data(financial_data, stock_info, daily_basic_info, price_value)
             if metrics:
                 # 缓存原始财务数据到数据库
                 self._cache_raw_financial_data(symbol, financial_data, stock_info)
@@ -1732,9 +1739,39 @@ class OptimizedChinaDataProvider:
             logger.error(f"❌ AKShare财务数据解析失败: {e}")
             return None
 
-    def _parse_financial_data(self, financial_data: dict, stock_info: dict, price_value: float) -> dict:
+    def _parse_financial_data(self, financial_data: dict, stock_info: dict, daily_basic_info: dict, price_value: float) -> dict:
         """解析财务数据为指标"""
         try:
+            def _safe_float(value):
+                if value is None:
+                    return None
+                if isinstance(value, str):
+                    if value.strip() in {"", "--"}:
+                        return None
+                    if value.lower() == "nan":
+                        return None
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    return None
+
+            def _pick_latest_record(records):
+                if not isinstance(records, list) or not records:
+                    return {}
+                best = None
+                best_key = None
+                for rec in records:
+                    if not isinstance(rec, dict):
+                        continue
+                    key = rec.get("end_date") or rec.get("ann_date") or rec.get("report_period")
+                    if key is None:
+                        continue
+                    key_str = str(key)
+                    if best is None or key_str > (best_key or ""):
+                        best = rec
+                        best_key = key_str
+                return best or (records[0] if isinstance(records[0], dict) else {})
+
             # 获取最新的财务数据
             raw_data = financial_data.get('raw_data')
             if isinstance(raw_data, dict):
@@ -1766,6 +1803,22 @@ class OptimizedChinaDataProvider:
             total_assets = latest_balance.get('total_assets', 0) or 0
             total_liab = latest_balance.get('total_liab', 0) or 0
             total_equity = latest_balance.get('total_hldr_eqy_exc_min_int', 0) or 0
+
+            indicators_records = None
+            if isinstance(raw_data, dict):
+                indicators_records = (
+                    raw_data.get("financial_indicators")
+                    or financial_data.get("financial_indicators")
+                    or raw_data.get("fina_indicator")
+                    or financial_data.get("fina_indicator")
+                )
+            else:
+                indicators_records = financial_data.get("financial_indicators") or financial_data.get("fina_indicator")
+
+            if isinstance(indicators_records, dict):
+                latest_indicator = indicators_records
+            else:
+                latest_indicator = _pick_latest_record(indicators_records)
 
             # 计算 TTM 营业收入和净利润
             # Tushare income_statement 的数据是累计值（从年初到报告期）
@@ -1817,87 +1870,187 @@ class OptimizedChinaDataProvider:
             revenue_type = "TTM" if ttm_revenue else "单期"
             profit_type = "TTM" if ttm_net_income else "单期"
 
-            # 获取实际总股本计算市值
-            # 优先从 stock_info 获取，如果没有则无法计算准确的估值指标
-            total_share = stock_info.get('total_share') if stock_info else None
+            logger.info(f"✅ -----------stock_info 数据-----------")
+            logger.info(f"{daily_basic_info}")
+            
+            total_mv_wan = daily_basic_info.get("total_mv") if daily_basic_info else None
+            total_share = daily_basic_info.get("total_share") if daily_basic_info else None
+            try:
+                total_mv_wan = float(total_mv_wan) if total_mv_wan is not None else None
+            except (TypeError, ValueError):
+                total_mv_wan = None
+            try:
+                total_share = float(total_share) if total_share is not None else None
+            except (TypeError, ValueError):
+                total_share = None
 
-            if total_share and total_share > 0:
-                # 市值（元）= 股价（元）× 总股本（万股）× 10000
+            if total_mv_wan and total_mv_wan > 0:
+                market_cap = total_mv_wan * 10000
+                metrics["total_mv"] = f"{(total_mv_wan / 10000):.2f}亿元"
+                logger.info(f"✅ [Tushare-总市值] 总市值={(total_mv_wan / 10000):.2f}亿元")
+            elif total_share and total_share > 0:
                 market_cap = price_value * total_share * 10000
-                market_cap_yi = market_cap / 100000000  # 转换为亿元
-                metrics["total_mv"] = f"{market_cap_yi:.2f}亿元"
-                logger.info(f"✅ [Tushare-总市值计算成功] 总市值={market_cap_yi:.2f}亿元 (股价{price_value}元 × 总股本{total_share}万股)")
+                metrics["total_mv"] = f"{(market_cap / 100000000):.2f}亿元"
+                logger.info(f"✅ [Tushare-总市值] 总市值={(market_cap / 100000000):.2f}亿元 (股价{price_value}元 × 总股本{total_share}万股)")
             else:
-                logger.error(f"❌ {stock_info.get('code', 'Unknown')} 无法获取总股本，无法计算准确的估值指标")
+                logger.error(f"❌ {stock_info.get('code', 'Unknown')} 无法获取总市值/总股本，无法计算准确的估值指标")
                 market_cap = None
                 metrics["total_mv"] = "N/A"
 
+            logger.info(f"✅ [Tushare-每日基础财务数据]")
+            logger.info(f"{daily_basic_info}")
+
             # 计算各项指标（只有在有准确市值时才计算）
             if market_cap:
-                # PE比率（优先使用 TTM 净利润）
-                if net_income > 0:
-                    pe_ratio = market_cap / (net_income * 10000)  # 转换单位
-                    metrics["pe"] = f"{pe_ratio:.1f}倍"
-                    logger.info(f"✅ Tushare 计算PE({profit_type}): 市值{market_cap/100000000:.2f}亿元 / 净利润{net_income:.2f}万元 = {pe_ratio:.1f}倍")
-                else:
-                    metrics["pe"] = "N/A（亏损）"
+                pe = daily_basic_info.get("pe") if daily_basic_info else None
+                pe_ttm = daily_basic_info.get("pe_ttm") if daily_basic_info else None
+                pb = daily_basic_info.get("pb") if daily_basic_info else None
+                ps = daily_basic_info.get("ps") if daily_basic_info else None
+                try:
+                    pe = float(pe) if pe is not None else None
+                except (TypeError, ValueError):
+                    pe = None
+                try:
+                    pe_ttm = float(pe_ttm) if pe_ttm is not None else None
+                except (TypeError, ValueError):
+                    pe_ttm = None
+                try:
+                    pb = float(pb) if pb is not None else None
+                except (TypeError, ValueError):
+                    pb = None
+                try:
+                    ps = float(ps) if ps is not None else None
+                except (TypeError, ValueError):
+                    ps = None
 
-                # PB比率（净资产使用最新期数据，相对准确）
-                if total_equity > 0:
-                    pb_ratio = market_cap / (total_equity * 10000)
-                    metrics["pb"] = f"{pb_ratio:.2f}倍"
+                if pe_ttm and pe_ttm > 0:
+                    metrics["pe_ttm"] = f"{pe_ttm:.1f}倍"
+                else:
+                    metrics["pe_ttm"] = "N/A"
+
+                if pe and pe > 0:
+                    metrics["pe"] = f"{pe:.1f}倍"
+                elif pe_ttm and pe_ttm > 0:
+                    metrics["pe"] = f"{pe_ttm:.1f}倍"
+                else:
+                    metrics["pe"] = "N/A"
+
+                if pb and pb > 0:
+                    metrics["pb"] = f"{pb:.2f}倍"
                 else:
                     metrics["pb"] = "N/A"
 
-                # PS比率（优先使用 TTM 营业收入）
-                if total_revenue > 0:
-                    ps_ratio = market_cap / (total_revenue * 10000)
-                    metrics["ps"] = f"{ps_ratio:.1f}倍"
-                    logger.info(f"✅ Tushare 计算PS({revenue_type}): 市值{market_cap/100000000:.2f}亿元 / 营业收入{total_revenue:.2f}万元 = {ps_ratio:.1f}倍")
+                if ps and ps > 0:
+                    metrics["ps"] = f"{ps:.1f}倍"
                 else:
                     metrics["ps"] = "N/A"
             else:
                 # 无法获取总股本，无法计算估值指标
                 metrics["pe"] = "N/A（无总股本数据）"
+                metrics["pe_ttm"] = "N/A（无总股本数据）"
                 metrics["pb"] = "N/A（无总股本数据）"
                 metrics["ps"] = "N/A（无总股本数据）"
 
             # ROE
-            if total_equity > 0 and net_income > 0:
+            roe_val = _safe_float(latest_indicator.get("roe")) if isinstance(latest_indicator, dict) else None
+            if roe_val is None:
+                roe_val = _safe_float(financial_data.get("roe") or financial_data.get("roe_waa") or financial_data.get("roe_dt"))
+            if roe_val is not None:
+                metrics["roe"] = f"{roe_val:.1f}%"
+            elif total_equity and total_equity > 0 and net_income is not None:
                 roe = (net_income / total_equity) * 100
                 metrics["roe"] = f"{roe:.1f}%"
             else:
                 metrics["roe"] = "N/A"
 
             # ROA
-            if total_assets > 0 and net_income > 0:
+            roa_val = _safe_float(latest_indicator.get("roa") or latest_indicator.get("roa2")) if isinstance(latest_indicator, dict) else None
+            if roa_val is None:
+                roa_val = _safe_float(financial_data.get("roa") or financial_data.get("roa2"))
+            if roa_val is not None:
+                metrics["roa"] = f"{roa_val:.1f}%"
+            elif total_assets and total_assets > 0 and net_income is not None:
                 roa = (net_income / total_assets) * 100
                 metrics["roa"] = f"{roa:.1f}%"
             else:
                 metrics["roa"] = "N/A"
 
             # 净利率
-            if total_revenue > 0 and net_income > 0:
+            net_margin_val = _safe_float(latest_indicator.get("netprofit_margin")) if isinstance(latest_indicator, dict) else None
+            if net_margin_val is None:
+                net_margin_val = _safe_float(financial_data.get("netprofit_margin"))
+            if net_margin_val is not None:
+                metrics["net_margin"] = f"{net_margin_val:.1f}%"
+            elif total_revenue and total_revenue > 0 and net_income is not None:
                 net_margin = (net_income / total_revenue) * 100
                 metrics["net_margin"] = f"{net_margin:.1f}%"
             else:
                 metrics["net_margin"] = "N/A"
 
             # 资产负债率
-            if total_assets > 0:
+            debt_ratio_val = _safe_float(latest_indicator.get("debt_to_assets")) if isinstance(latest_indicator, dict) else None
+            if debt_ratio_val is None:
+                debt_ratio_val = _safe_float(financial_data.get("debt_to_assets"))
+            if debt_ratio_val is not None:
+                metrics["debt_ratio"] = f"{debt_ratio_val:.1f}%"
+            elif total_assets and total_assets > 0:
                 debt_ratio = (total_liab / total_assets) * 100
                 metrics["debt_ratio"] = f"{debt_ratio:.1f}%"
             else:
                 metrics["debt_ratio"] = "N/A"
 
-            # 其他指标设为默认值
-            metrics.update({
-                "dividend_yield": "待查询",
-                "gross_margin": "待计算",
-                "current_ratio": "待计算",
-                "quick_ratio": "待计算",
-                "cash_ratio": "待分析"
-            })
+            gross_margin_val = _safe_float(latest_indicator.get("grossprofit_margin")) if isinstance(latest_indicator, dict) else None
+            if gross_margin_val is None:
+                gross_margin_val = _safe_float(financial_data.get("gross_margin"))
+            if gross_margin_val is None and isinstance(latest_indicator, dict):
+                gross_margin_val = _safe_float(latest_indicator.get("gross_margin"))
+            if gross_margin_val is not None:
+                metrics["gross_margin"] = f"{gross_margin_val:.1f}%"
+            else:
+                rev_for_gm = _safe_float(latest_income.get("revenue") or latest_income.get("oper_rev") or latest_income.get("total_revenue"))
+                cost_for_gm = _safe_float(latest_income.get("oper_cost"))
+                if rev_for_gm and rev_for_gm != 0 and cost_for_gm is not None:
+                    metrics["gross_margin"] = f"{((rev_for_gm - cost_for_gm) / rev_for_gm * 100):.1f}%"
+                else:
+                    metrics["gross_margin"] = "N/A"
+
+            current_ratio_val = _safe_float(latest_indicator.get("current_ratio")) if isinstance(latest_indicator, dict) else None
+            if current_ratio_val is None:
+                current_ratio_val = _safe_float(financial_data.get("current_ratio"))
+            if current_ratio_val is None:
+                cur_assets = _safe_float(latest_balance.get("total_cur_assets"))
+                cur_liab = _safe_float(latest_balance.get("total_cur_liab"))
+                if cur_assets is not None and cur_liab and cur_liab != 0:
+                    current_ratio_val = cur_assets / cur_liab
+            metrics["current_ratio"] = f"{current_ratio_val:.2f}" if current_ratio_val is not None else "N/A"
+
+            quick_ratio_val = _safe_float(latest_indicator.get("quick_ratio")) if isinstance(latest_indicator, dict) else None
+            if quick_ratio_val is None:
+                quick_ratio_val = _safe_float(financial_data.get("quick_ratio"))
+            if quick_ratio_val is None:
+                cur_assets = _safe_float(latest_balance.get("total_cur_assets"))
+                inventories = _safe_float(latest_balance.get("inventories")) or 0.0
+                cur_liab = _safe_float(latest_balance.get("total_cur_liab"))
+                if cur_assets is not None and cur_liab and cur_liab != 0:
+                    quick_ratio_val = (cur_assets - inventories) / cur_liab
+            metrics["quick_ratio"] = f"{quick_ratio_val:.2f}" if quick_ratio_val is not None else "N/A"
+
+            cash_ratio_val = _safe_float(latest_indicator.get("cash_ratio")) if isinstance(latest_indicator, dict) else None
+            if cash_ratio_val is None:
+                cash_ratio_val = _safe_float(financial_data.get("cash_ratio"))
+            if cash_ratio_val is None:
+                money_cap = _safe_float(latest_balance.get("money_cap"))
+                cur_liab = _safe_float(latest_balance.get("total_cur_liab"))
+                if money_cap is not None and cur_liab and cur_liab != 0:
+                    cash_ratio_val = money_cap / cur_liab
+            metrics["cash_ratio"] = f"{cash_ratio_val:.2f}" if cash_ratio_val is not None else "N/A"
+
+            dv_val = None
+            if daily_basic_info:
+                dv_val = _safe_float(daily_basic_info.get("dv_ttm"))
+                if dv_val is None:
+                    dv_val = _safe_float(daily_basic_info.get("dv_ratio"))
+            metrics["dividend_yield"] = f"{dv_val:.2f}%" if dv_val is not None else "N/A"
 
             # 评分（基于真实数据的简化评分）
             fundamental_score = self._calculate_fundamental_score(metrics, stock_info)

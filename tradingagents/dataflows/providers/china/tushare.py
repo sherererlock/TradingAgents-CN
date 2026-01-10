@@ -676,27 +676,60 @@ class TushareProvider(BaseStockDataProvider):
     
     # ==================== 扩展接口 ====================
     
-    async def get_daily_basic(self, trade_date: str) -> Optional[pd.DataFrame]:
-        """获取每日基础财务数据"""
+    async def get_daily_basic(self, symbol: str, trade_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """获取单只股票指定交易日的每日指标（daily_basic）"""
         if not self.is_available():
             return None
         
         try:
-            date_str = trade_date.replace('-', '')
+            if not trade_date:
+                trade_date = await self.find_latest_trade_date()
+                if not trade_date:
+                    return None
+
+            date_str = trade_date.replace("-", "")
+            ts_code = self._normalize_ts_code(symbol)
+
             df = await asyncio.to_thread(
                 self.api.daily_basic,
+                ts_code=ts_code,
                 trade_date=date_str,
-                fields='ts_code,total_mv,circ_mv,pe,pb,turnover_rate,volume_ratio,pe_ttm,pb_mrq'
+                fields="ts_code,trade_date,close,turnover_rate,volume_ratio,pe,pe_ttm,pb,ps,dv_ratio,dv_ttm,total_share,float_share,total_mv,circ_mv,pb_mrq",
+                limit=1,
             )
             
             if df is not None and not df.empty:
-                self.logger.info(f"✅ 获取每日基础数据: {trade_date} {len(df)}条记录")
-                return df
+                row = df.iloc[0].to_dict()
+                total_share = self._convert_to_float(row.get("total_share"))
+                total_mv = self._convert_to_float(row.get("total_mv"))
+                circ_mv = self._convert_to_float(row.get("circ_mv"))
+
+                self.logger.info(f"✅ 获取每日基础数据: {symbol} {date_str} 1条记录")
+                return {
+                    "symbol": symbol,
+                    "ts_code": row.get("ts_code") or ts_code,
+                    "trade_date": row.get("trade_date") or date_str,
+                    "total_share": total_share,
+                    "float_share": self._convert_to_float(row.get("float_share")),
+                    "total_mv": total_mv,
+                    "circ_mv": circ_mv,
+                    "pe": self._convert_to_float(row.get("pe")),
+                    "pe_ttm": self._convert_to_float(row.get("pe_ttm")),
+                    "pb": self._convert_to_float(row.get("pb")),
+                    "pb_mrq": self._convert_to_float(row.get("pb_mrq")),
+                    "ps": self._convert_to_float(row.get("ps")),
+                    "dv_ratio": self._convert_to_float(row.get("dv_ratio")),
+                    "dv_ttm": self._convert_to_float(row.get("dv_ttm")),
+                    "turnover_rate": self._convert_to_float(row.get("turnover_rate")),
+                    "volume_ratio": self._convert_to_float(row.get("volume_ratio")),
+                    "close": self._convert_to_float(row.get("close")),
+                    "updated_at": datetime.utcnow(),
+                }
             
             return None
             
         except Exception as e:
-            self.logger.error(f"❌ 获取每日基础数据失败 trade_date={trade_date}: {e}")
+            self.logger.error(f"❌ 获取每日基础数据失败 symbol={symbol}, trade_date={trade_date}: {e}")
             return None
     
     async def find_latest_trade_date(self) -> Optional[str]:
@@ -732,7 +765,7 @@ class TushareProvider(BaseStockDataProvider):
             return None
     
     async def get_financial_data(self, symbol: str, report_type: str = "quarterly",
-                                period: str = None, limit: int = 4) -> Optional[Dict[str, Any]]:
+                                period: str = None, limit: int = 10) -> Optional[Dict[str, Any]]:
         """
         获取财务数据
 
@@ -1418,6 +1451,8 @@ class TushareProvider(BaseStockDataProvider):
 
             # 计算 TTM 数据
             income_statements = financial_data.get('income_statement', [])
+            logger.info(f"利润表数据：{income_statements}")
+
             revenue_ttm = self._calculate_ttm_from_tushare(income_statements, 'revenue')
             net_profit_ttm = self._calculate_ttm_from_tushare(income_statements, 'n_income_attr_p')
 
