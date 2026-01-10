@@ -734,6 +734,27 @@ class OptimizedChinaDataProvider:
         except Exception as e:
             logger.warning(f"⚠️ 从数据库获取行业信息失败: {e}")
 
+        
+        from .data_source_manager import get_china_stock_info_unified
+        stock_info = get_china_stock_info_unified(symbol)
+
+        if stock_info:
+            info = {
+                "industry": stock_info.get("industry", "未知"),
+                "market": stock_info.get("market", "未知"),
+                "type": self._get_market_type_by_code(symbol)
+            }
+            logger.debug(f"🔍 [股票代码追踪] 从接口获取的行业信息: {info}")
+
+            info.update({
+                "analysis": f"该股票属于{info['industry']}行业，在{info['market']}上市交易。",
+                "market_share": "待分析",
+                "brand_value": "待评估",
+                "tech_advantage": "待分析"
+            })
+
+            return info
+
         # 备用方案：使用代码前缀判断（但修正了行业/市场的映射）
         logger.debug(f"🔍 [股票代码追踪] 使用备用方案，基于代码前缀判断")
         code_prefix = symbol[:3]

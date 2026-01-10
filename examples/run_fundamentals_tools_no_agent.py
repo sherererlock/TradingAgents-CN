@@ -360,8 +360,8 @@ def main() -> int:
 
     ticker = "600160"
     start_date = "2025-07-18"
-    end_date = "2026-01-09"
-    curr_date = "2026-01-09"
+    end_date = "2026-01-10"
+    curr_date = "2026-01-10"
 
     market_info = StockUtils.get_market_info(ticker)
     company_name = _get_company_name(ticker, market_info)
