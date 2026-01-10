@@ -1451,7 +1451,6 @@ class TushareProvider(BaseStockDataProvider):
 
             # 计算 TTM 数据
             income_statements = financial_data.get('income_statement', [])
-            logger.info(f"利润表数据：{income_statements}")
 
             revenue_ttm = self._calculate_ttm_from_tushare(income_statements, 'revenue')
             net_profit_ttm = self._calculate_ttm_from_tushare(income_statements, 'n_income_attr_p')

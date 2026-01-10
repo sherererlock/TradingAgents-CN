@@ -363,9 +363,7 @@ def _calculate_ttm_metric(df, metric_name: str) -> Optional[float]:
     Returns:
         TTM 指标值（万元），如果无法计算则返回 None
     """
-    logger.info(f"数据：----------------- ")
-    logger.info(f"{df}")
-
+    
     try:
         if df is None or df.empty or len(df) < 1:
             return None
