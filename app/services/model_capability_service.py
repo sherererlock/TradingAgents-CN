@@ -247,6 +247,8 @@ class ModelCapabilityService:
             "warnings": [],
             "recommendations": []
         }
+
+        return result
         
         # 检查快速模型
         quick_level = quick_config["capability_level"]
