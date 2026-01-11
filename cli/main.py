@@ -534,8 +534,8 @@ def get_user_selections_fake():
         "research_depth": 1,
         "llm_provider": "阿里百炼 (dashscope)",
         "backend_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "shallow_thinker": "qwen-max",
-        "deep_thinker": "qwen-max",
+        "shallow_thinker": "deepseek-r1",
+        "deep_thinker": "deepseek-r1",
     }
 
 def get_user_selections():

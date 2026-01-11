@@ -42,7 +42,7 @@ flowchart TD
     
     CallLLMFinal --> Success{生成成功?}
     Success -- 是 --> SetReport[设置最终报告]
-    Success -- 否 (异常) --> ErrorReport[生成降级/错误报告]
+    Success -- 否异常 --> ErrorReport[生成降级/错误报告]
     
     SetReport --> Finalize
     ErrorReport --> Finalize
