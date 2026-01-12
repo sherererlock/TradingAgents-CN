@@ -15,6 +15,7 @@ class ModelProvider(str, Enum):
     """大模型提供商枚举"""
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    MIMO = "mimo"
     ZHIPU = "zhipu"
     QWEN = "qwen"
     BAIDU = "baidu"

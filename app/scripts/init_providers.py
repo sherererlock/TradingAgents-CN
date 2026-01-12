@@ -86,6 +86,16 @@ async def init_providers():
             "supported_features": ["chat", "completion", "embedding", "function_calling", "streaming"]
         },
         {
+            "name": "mimo",
+            "display_name": "小米大模型",
+            "description": "小米大模型服务（OpenAI 兼容接口）",
+            "website": "https://www.xiaomi.com",
+            "api_doc_url": "https://api.xiaomimimo.com",
+            "default_base_url": "https://api.xiaomimimo.com/v1",
+            "is_active": True,
+            "supported_features": ["chat", "completion", "embedding", "function_calling", "streaming"]
+        },
+        {
             "name": "siliconflow",
             "display_name": "硅基流动",
             "description": "硅基流动提供高性价比的AI推理服务，支持多种开源模型",

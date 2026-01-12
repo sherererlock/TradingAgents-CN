@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 # Import router and dependencies to override
 from app.routers import sse as sse_router_mod
 from app.routers.sse import router as sse_router
-from app.routers.auth import get_current_user
+from app.routers.auth_db import get_current_user
 from app.services.queue_service import QueueService, get_queue_service as real_get_queue_service
 
 
@@ -156,4 +156,3 @@ def test_worker_intervals_env_and_dynamic_override(monkeypatch):
     assert w.heartbeat_interval == 5
     assert abs(w.poll_interval - 0.2) < 1e-6
     assert w.cleanup_interval == 10
-

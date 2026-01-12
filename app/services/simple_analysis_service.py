@@ -290,6 +290,7 @@ def _get_env_api_key_for_provider(provider: str) -> str:
         "openrouter": "OPENROUTER_API_KEY",
         "siliconflow": "SILICONFLOW_API_KEY",
         "qianfan": "QIANFAN_API_KEY",
+        "mimo": "MIMO_API_KEY",
         "302ai": "AI302_API_KEY",
     }
 
@@ -320,6 +321,7 @@ def _get_default_backend_url(provider: str) -> str:
         "anthropic": "https://api.anthropic.com",
         "openrouter": "https://openrouter.ai/api/v1",
         "qianfan": "https://qianfan.baidubce.com/v2",
+        "xiaomi": "https://api.xiaomimimo.com/v1",
         "302ai": "https://api.302.ai/v1",
     }
 
@@ -525,6 +527,8 @@ def create_analysis_config(
             config["backend_url"] = "https://generativelanguage.googleapis.com/v1beta"
         elif llm_provider == "qianfan":
             config["backend_url"] = "https://aip.baidubce.com"
+        elif llm_provider == "mimo":
+            config["backend_url"] = "https://api.xiaomimimo.com/v1"
         else:
             # 🔧 未知厂家，尝试从数据库获取厂家的 default_base_url
             logger.warning(f"⚠️  未知厂家 {llm_provider}，尝试从数据库获取配置")

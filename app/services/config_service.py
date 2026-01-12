@@ -2855,6 +2855,7 @@ class ConfigService:
             "azure": "AZURE_OPENAI_API_KEY",
             "siliconflow": "SILICONFLOW_API_KEY",
             "openrouter": "OPENROUTER_API_KEY",
+            "mimo": "MIMO_API_KEY",
             # 🆕 聚合渠道
             "302ai": "AI302_API_KEY",
             "oneapi": "ONEAPI_API_KEY",
@@ -3170,6 +3171,15 @@ class ConfigService:
                     "api_doc_url": "https://platform.deepseek.com/api-docs",
                     "default_base_url": "https://api.deepseek.com",
                     "supported_features": ["chat", "completion", "function_calling", "streaming"]
+                },
+                {
+                    "name": "xiaomi",
+                    "display_name": "小米大模型",
+                    "description": "小米大模型服务（OpenAI 兼容接口）",
+                    "website": "https://www.xiaomi.com",
+                    "api_doc_url": "https://api.xiaomimimo.com",
+                    "default_base_url": "https://api.xiaomimimo.com/v1",
+                    "supported_features": ["chat", "completion", "embedding", "function_calling", "streaming"]
                 }
             ]
 

@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.routers import config as config_router  # noqa: E402
-from app.routers.auth import get_current_user  # noqa: E402
+from app.routers.auth_db import get_current_user  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.services.config_service import config_service  # noqa: E402
 
@@ -95,4 +95,3 @@ def test_update_llm_provider_sanitizes_api_key(monkeypatch, test_app: TestClient
     assert captured.get("provider_id") == "abc123"
     # Ensure api_key in update_data was sanitized to empty string
     assert captured.get("api_key") == ""
-

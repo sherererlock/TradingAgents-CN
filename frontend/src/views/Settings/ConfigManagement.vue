@@ -1562,7 +1562,8 @@ const getProviderTagType = (provider: string) => {
     'qwen': 'info',
     'zhipu': 'danger',
     'deepseek': 'primary',
-    'qianfan': 'success'
+    'qianfan': 'success',
+    'mimo': 'info'
   }
   return typeMap[provider.toLowerCase()] || 'info'
 }

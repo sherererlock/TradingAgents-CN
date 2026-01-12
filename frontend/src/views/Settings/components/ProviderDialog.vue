@@ -254,7 +254,7 @@ const presetProviders = [
     register_url: 'https://share.302.ai/DUjftK',
     register_guide: '如果您还没有 302.AI 账号，请先注册并获取 API Key：'
   },
-    {
+  {
     name: 'deepseek',
     display_name: 'DeepSeek',
     description: 'DeepSeek提供高性能的AI推理服务',
@@ -264,6 +264,15 @@ const presetProviders = [
     supported_features: ['chat', 'completion', 'function_calling', 'streaming'],
     register_url: 'https://platform.deepseek.com/sign_up',
     register_guide: '如果您还没有 DeepSeek 账号，请先注册并获取 API Key：'
+  },
+  {
+    name: 'mimo',
+    display_name: '小米大模型',
+    description: '小米大模型服务（OpenAI 兼容接口）',
+    website: 'https://www.xiaomi.com',
+    api_doc_url: 'https://api.xiaomimimo.com',
+    default_base_url: 'https://api.xiaomimimo.com/v1',
+    supported_features: ['chat', 'completion', 'embedding', 'function_calling', 'streaming']
   },
   {
     name: 'openai',
