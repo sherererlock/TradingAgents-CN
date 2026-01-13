@@ -1132,15 +1132,15 @@ class Toolkit:
             # 组合所有数据
             combined_result = f"""# {ticker} 市场数据分析
 
-**股票类型**: {market_info['market_name']}
-**货币**: {market_info['currency_name']} ({market_info['currency_symbol']})
-**分析期间**: {start_date} 至 {end_date}
+                **股票类型**: {market_info['market_name']}
+                **货币**: {market_info['currency_name']} ({market_info['currency_symbol']})
+                **分析期间**: {start_date} 至 {end_date}
 
-{chr(10).join(result_data)}
+                {chr(10).join(result_data)}
 
----
-*数据来源: 根据股票类型自动选择最适合的数据源*
-"""
+                ---
+                *数据来源: 根据股票类型自动选择最适合的数据源*
+            """
 
             logger.info(f"📈 [统一市场工具] 数据获取完成，总长度: {len(combined_result)}")
             return combined_result

@@ -91,6 +91,27 @@ def _get_company_name(ticker: str, market_info: dict) -> str:
         logger.error(f"❌ [DEBUG] 获取公司名称失败: {e}")
         return f"股票{ticker}"
 
+def log_market_analyst_message(messages):
+    """
+    记录市场分析师的消息
+
+    Args:
+        state: 当前状态字典
+    """
+            # 打印实际传递给LLM的消息
+    logger.info(f"📊 [市场分析师] ========== 传递给LLM的消息 ==========")
+    for i, msg in enumerate(messages):
+        msg_type = type(msg).__name__
+        # 🔥 修复：更安全地提取消息内容
+        if hasattr(msg, 'content'):
+            msg_content = str(msg.content)[:500]  # 增加到500字符以便查看完整内容
+        elif isinstance(msg, tuple) and len(msg) >= 2:
+            # 处理旧格式的元组消息 ("human", "content")
+            msg_content = f"[元组消息] 类型={msg[0]}, 内容={str(msg[1])[:500]}"
+        else:
+            msg_content = str(msg)[:500]
+        logger.info(f"📊 [市场分析师] 消息[{i}] 类型={msg_type}, 内容={msg_content}")
+    logger.info(f"📊 [市场分析师] ========== 消息列表结束 ==========")
 
 def create_market_analyst(llm, toolkit):
 
@@ -225,19 +246,7 @@ def create_market_analyst(llm, toolkit):
         logger.info("📊 [市场分析师] ==========================================")
 
         # 打印实际传递给LLM的消息
-        logger.info(f"📊 [市场分析师] ========== 传递给LLM的消息 ==========")
-        for i, msg in enumerate(state["messages"]):
-            msg_type = type(msg).__name__
-            # 🔥 修复：更安全地提取消息内容
-            if hasattr(msg, 'content'):
-                msg_content = str(msg.content)[:500]  # 增加到500字符以便查看完整内容
-            elif isinstance(msg, tuple) and len(msg) >= 2:
-                # 处理旧格式的元组消息 ("human", "content")
-                msg_content = f"[元组消息] 类型={msg[0]}, 内容={str(msg[1])[:500]}"
-            else:
-                msg_content = str(msg)[:500]
-            logger.info(f"📊 [市场分析师] 消息[{i}] 类型={msg_type}, 内容={msg_content}")
-        logger.info(f"📊 [市场分析师] ========== 消息列表结束 ==========")
+        log_market_analyst_message(state["messages"])
 
         chain = prompt | llm.bind_tools(tools)
 
@@ -468,6 +477,9 @@ def create_market_analyst(llm, toolkit):
 
                     # 构建完整的消息序列
                     messages = state["messages"] + [result] + tool_messages + [HumanMessage(content=analysis_prompt)]
+
+                    # 打印实际传递给LLM的消息
+                    log_market_analyst_message(messages)
 
                     # 生成最终分析报告
                     final_result = llm.invoke(messages)
