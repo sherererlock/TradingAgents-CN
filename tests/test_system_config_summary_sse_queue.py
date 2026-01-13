@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 # Import the router and its dependency to override
 from app.routers import system_config as system_cfg_router
-from app.routers.auth import get_current_user
+from app.routers.auth_db import get_current_user
 
 
 @pytest.fixture()
@@ -40,4 +40,3 @@ def test_config_summary_contains_new_settings_fields(app_client: TestClient):
     assert "SSE_TASK_MAX_IDLE_SECONDS" in s
     assert "SSE_BATCH_POLL_INTERVAL_SECONDS" in s
     assert "SSE_BATCH_MAX_IDLE_SECONDS" in s
-

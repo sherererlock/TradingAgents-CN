@@ -42,6 +42,7 @@ class ErrorFormatter:
         "anthropic": "Anthropic Claude",
         "zhipu": "智谱AI",
         "moonshot": "月之暗面（Kimi）",
+        "mimo": "小米大模型",
     }
     
     # 数据源名称映射
@@ -405,4 +406,3 @@ class ErrorFormatter:
                 ),
                 "technical_detail": original_error
             }
-

@@ -23,7 +23,7 @@ def test_offhours_backfill_when_empty(monkeypatch):
         def __init__(self, upserted):
             self.matched_count = 0
             self.modified_count = 0
-            self.upserted_ids = {i: None for i in range(upserted)}
+            self.upserted_ids = {i: f"fakeid-{i}" for i in range(upserted)}
 
     class _FakeColl:
         def __init__(self):
@@ -62,4 +62,3 @@ def test_offhours_backfill_when_empty(monkeypatch):
         assert len(fake_db._coll.last_ops) == 2
 
     asyncio.run(_run())
-

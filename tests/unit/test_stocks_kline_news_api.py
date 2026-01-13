@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 # Build a minimal app that mounts only the stocks router to avoid triggering app.main lifespan
 from app.routers import stocks as stocks_router
-from app.routers.auth import get_current_user
+from app.routers.auth_db import get_current_user
 
 
 def create_test_app():
@@ -73,4 +73,3 @@ def test_news_ok_with_announcements_and_source(client):
         assert data["include_announcements"] is True
         assert data["source"] == "tushare"
         assert isinstance(data["items"], list) and len(data["items"]) == 2
-

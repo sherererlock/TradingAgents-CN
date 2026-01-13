@@ -105,6 +105,19 @@ def create_llm_by_provider(provider: str, model: str, backend_url: str, temperat
             timeout=timeout
         )
 
+    elif provider.lower() == "xiaomi":
+        from tradingagents.llm_adapters.xiaomi_openai_adapter import ChatXiaomiOpenAI
+
+        mimo_api_key = api_key or os.getenv("MIMO_API_KEY") 
+        return ChatXiaomiOpenAI(
+            model=model,
+            api_key=mimo_api_key,
+            base_url=backend_url or "https://api.xiaomimimo.com/v1",
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+        )
+
     elif provider.lower() == "zhipu":
         # 智谱AI处理
         zhipu_api_key = api_key or os.getenv('ZHIPU_API_KEY')
