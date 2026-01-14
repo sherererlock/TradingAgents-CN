@@ -291,6 +291,52 @@ class FinancialSituationMemory:
                 self.client = "DISABLED"
                 logger.warning(f"⚠️ OpenRouter未找到DASHSCOPE_API_KEY，记忆功能已禁用")
                 logger.info(f"💡 系统将继续运行，但不会保存或检索历史记忆")
+        elif self.llm_provider == "mimo":
+            dashscope_key = os.getenv('DASHSCOPE_API_KEY')
+            openai_key = os.getenv('OPENAI_API_KEY')
+
+            if dashscope_key:
+                try:
+                    import dashscope
+                    from dashscope import TextEmbedding
+
+                    self.embedding = "text-embedding-v3"
+                    self.client = None
+                    dashscope.api_key = dashscope_key
+
+                    if openai_key:
+                        self.fallback_available = True
+                        self.fallback_client = OpenAI(
+                            api_key=openai_key,
+                            base_url="https://api.openai.com/v1",
+                        )
+                        self.fallback_embedding = "text-embedding-3-small"
+                        logger.info("💡 MIMO使用阿里百炼嵌入服务（OpenAI作为降级选项）")
+                    else:
+                        self.fallback_available = False
+                        logger.info("💡 MIMO使用阿里百炼嵌入服务（无降级选项）")
+
+                except ImportError as e:
+                    logger.error(f"❌ DashScope包未安装: {e}")
+                    self.client = "DISABLED"
+                    logger.warning("⚠️ MIMO记忆功能已禁用")
+                except Exception as e:
+                    logger.error(f"❌ DashScope初始化失败: {e}")
+                    self.client = "DISABLED"
+                    logger.warning("⚠️ MIMO记忆功能已禁用")
+            else:
+                if openai_key:
+                    self.embedding = "text-embedding-3-small"
+                    self.client = OpenAI(
+                        api_key=openai_key,
+                        base_url="https://api.openai.com/v1",
+                    )
+                    logger.warning("⚠️ MIMO未找到DASHSCOPE_API_KEY，回退到OpenAI嵌入服务")
+                else:
+                    self.client = "DISABLED"
+                    self.fallback_available = False
+                    logger.warning("⚠️ MIMO未找到DASHSCOPE_API_KEY/OPENAI_API_KEY，记忆功能已禁用")
+                    logger.info("💡 系统将继续运行，但不会保存或检索历史记忆")
         elif config["backend_url"] == "http://localhost:11434/v1":
             self.embedding = "nomic-embed-text"
             self.client = OpenAI(base_url=config["backend_url"])
@@ -401,7 +447,8 @@ class FinancialSituationMemory:
             self.llm_provider == "qianfan" or
             (self.llm_provider == "google" and self.client is None) or
             (self.llm_provider == "deepseek" and self.client is None) or
-            (self.llm_provider == "openrouter" and self.client is None)):
+            (self.llm_provider == "openrouter" and self.client is None) or 
+            (self.llm_provider == "mimo" and self.client is None)):
             # 使用阿里百炼的嵌入模型
             try:
                 # 导入DashScope模块
