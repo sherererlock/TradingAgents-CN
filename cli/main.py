@@ -560,6 +560,28 @@ def get_user_selections_fake_mimo():
         "deep_thinker": "mimo-v2-flash",
     }
 
+def get_user_selections_fake_mimo_H():
+    """Return fake user selections for testing."""
+    return {
+        "ticker": "1810.HK",
+        "market": {
+            "name": "港股",
+            "name_en": "Hong Kong Stock",
+            "default": "1810.HK",
+            "examples": ["1810.HK (小米集团)", "0700.HK (腾讯)", "09988.HK (阿里巴巴)"],
+            "format": "代码.HK (如: 1810.HK, 0700.HK)",
+            "pattern": r"^\d{4,5}\.HK$",
+            "data_source": "yahoo_finance",
+        },
+        "analysis_date": "2026-01-15",
+        "analysts": [AnalystType.FUNDAMENTALS],
+        "research_depth": 1,
+        "llm_provider": "mimo",
+        "backend_url": "https://api.xiaomimimo.com/v1",
+        "shallow_thinker": "mimo-v2-flash",
+        "deep_thinker": "mimo-v2-flash",
+    }
+0
 def get_user_selections_fake_H():
     """Return fake user selections for testing."""
     return {
@@ -1096,7 +1118,7 @@ def run_analysis():
     start_time = time.time()  # 记录开始时间
     
     # First get all user selections
-    selections = get_user_selections_fake_mimo()
+    selections = get_user_selections_fake_mimo_H()
 
 
     logger.info(f"用户选择 | User Selections: {selections}")
