@@ -211,16 +211,6 @@ Data providers require API keys:
 - **BaoStock**: Free, good for historical data
 - **Finnhub/Alpha Vantage**: For US stocks
 
-## Testing Strategy
-
-- **Unit Tests**: `tests/` directory, run with `pytest` (excludes integration by default)
-- **Integration Tests**: Marked with `@pytest.mark.integration`, run with `pytest -m integration`
-- **Test Configuration**: `tests/pytest.ini` configures test discovery and markers
-  - Default: `pytest` runs unit tests only (skips integration)
-  - Integration: `pytest -m integration` runs integration tests
-  - Specific: `pytest tests/test_analysis.py` runs a single test file
-- **Scripts**: Many `test_*.py` files in `scripts/` are development/debugging scripts, not formal tests
-
 ## Environment Variables
 
 Key environment variables (see `.env.example`):

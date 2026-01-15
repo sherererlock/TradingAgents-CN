@@ -541,7 +541,7 @@ def get_user_selections_fake():
 def get_user_selections_fake_mimo():
     """Return fake user selections for testing."""
     return {
-        "ticker": "600160",
+        "ticker": "600089",
         "market": {
             "name": "A股",
             "name_en": "China A-Share",
@@ -551,8 +551,8 @@ def get_user_selections_fake_mimo():
             "pattern": r"^\d{6}$",
             "data_source": "china_stock",
         },
-        "analysis_date": "2026-01-08",
-        "analysts": [AnalystType.FUNDAMENTALS],
+        "analysis_date": "2026-01-15",
+        "analysts": [AnalystType.NEWS],
         "research_depth": 1,
         "llm_provider": "mimo",
         "backend_url": "https://api.xiaomimimo.com/v1",
@@ -822,7 +822,7 @@ def get_analysis_date():
 
 def display_complete_report(final_state):
     """Display the complete analysis report with team-based panels."""
-    logger.info(f"\n[bold green]Complete Analysis Report[/bold green]\n")
+    console.print("\n[bold green]Complete Analysis Report[/bold green]\n")
 
     # I. Analyst Team Reports
     analyst_reports = []
@@ -1211,6 +1211,8 @@ def run_analysis():
 
     # Now start the display layout
     layout = create_layout()
+
+    final_state = None
 
     with Live(layout, refresh_per_second=DEFAULT_REFRESH_RATE) as live:
         # Initial display
@@ -1635,44 +1637,38 @@ def run_analysis():
 
             trace.append(chunk)
 
-        # 显示最终决策阶段
-        ui.show_step_header(5, "投资决策生成 | Investment Decision Generation")
-        ui.show_progress("正在处理投资信号...")
+        if trace:
+            final_state = trace[-1]
 
-        # Get final state and decision
-        final_state = trace[-1]
-        decision = graph.process_signal(final_state["final_trade_decision"], selections['ticker'])
+    if not final_state:
+        ui.show_error("❌ 未获取到最终分析结果")
+        return
 
-        ui.show_success("🤖 投资信号处理完成")
+    ui.show_step_header(5, "投资决策生成 | Investment Decision Generation")
+    ui.show_progress("正在处理投资信号...")
+    decision = graph.process_signal(final_state["final_trade_decision"], selections['ticker'])
+    ui.show_success("🤖 投资信号处理完成")
 
-        # Update all agent statuses to completed
-        for agent in message_buffer.agent_status:
-            message_buffer.update_agent_status(agent, "completed")
+    for agent in message_buffer.agent_status:
+        message_buffer.update_agent_status(agent, "completed")
 
-        message_buffer.add_message(
-            "Analysis", f"Completed analysis for {selections['analysis_date']}"
-        )
+    message_buffer.add_message(
+        "Analysis", f"Completed analysis for {selections['analysis_date']}"
+    )
 
-        # Update final report sections
-        for section in message_buffer.report_sections.keys():
-            if section in final_state:
-                message_buffer.update_report_section(section, final_state[section])
+    for section in message_buffer.report_sections.keys():
+        if section in final_state:
+            message_buffer.update_report_section(section, final_state[section])
 
-        # 显示报告生成完成
-        ui.show_step_header(6, "分析报告生成 | Analysis Report Generation")
-        ui.show_progress("正在生成最终报告...")
+    ui.show_step_header(6, "分析报告生成 | Analysis Report Generation")
+    ui.show_progress("正在生成最终报告...")
+    display_complete_report(final_state)
 
-        # Display the complete final report
-        display_complete_report(final_state)
+    ui.show_success("📋 分析报告生成完成")
+    ui.show_success(f"🎉 {selections['ticker']} 股票分析全部完成！")
 
-        ui.show_success("📋 分析报告生成完成")
-        ui.show_success(f"🎉 {selections['ticker']} 股票分析全部完成！")
-        
-        # 记录总执行时间
-        total_time = time.time() - start_time
-        ui.show_user_message(f"⏱️ 总分析时间: {total_time:.1f}秒", "dim")
-
-        update_display(layout)
+    total_time = time.time() - start_time
+    ui.show_user_message(f"⏱️ 总分析时间: {total_time:.1f}秒", "dim")
 
 
 @app.command(

@@ -204,6 +204,7 @@ def create_news_analyst(llm, toolkit):
         if ('DashScope' in llm.__class__.__name__ 
             or 'DeepSeek' in llm.__class__.__name__
             or 'Zhipu' in llm.__class__.__name__
+            or 'Mimo' in llm.__class__.__name__
             ):
             logger.warning(f"[新闻分析师] 🚨 检测到{llm.__class__.__name__}模型，启动预处理强制新闻获取...")
             try:

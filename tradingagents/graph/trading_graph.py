@@ -106,7 +106,7 @@ def create_llm_by_provider(provider: str, model: str, backend_url: str, temperat
         )
 
     elif provider.lower() == "xiaomi":
-        from tradingagents.llm_adapters.xiaomi_openai_adapter import ChatXiaomiOpenAI
+        from tradingagents.llm_adapters.mimo_openai_adapter import ChatXiaomiOpenAI
 
         mimo_api_key = api_key or os.getenv("MIMO_API_KEY") 
         return ChatXiaomiOpenAI(
@@ -690,6 +690,81 @@ class TradingAgentsGraph:
             )
             
             logger.info("✅ [智谱AI] 已使用专用适配器配置成功并应用用户配置的模型参数")
+        elif self.config["llm_provider"].lower() == "mimo":
+            # 小米米米模型配置 - 使用专门的ChatMimoOpenAI适配器
+            from tradingagents.llm_adapters.mimo_openai_adapter import ChatMimoOpenAI
+            
+            # 🔥 优先使用数据库配置的 API Key，否则从环境变量读取
+            mimo_api_key = os.getenv('MIMO_API_KEY')
+
+            if not mimo_api_key:
+                raise ValueError("使用小米模型需要在数据库中配置API Key或设置MIMO_API_KEY环境变量")
+            
+            
+            logger.info(f"🔧 使用小米 OpenAI 兼容适配器 (支持原生工具调用)")
+
+            # 🔧 从配置中读取模型参数（优先使用用户配置，否则使用默认值）
+            quick_config = self.config.get("quick_model_config", {})
+            deep_config = self.config.get("deep_model_config", {})
+
+            # 读取快速模型参数
+            quick_max_tokens = quick_config.get("max_tokens", 4000)
+            quick_temperature = quick_config.get("temperature", 0.7)
+            quick_timeout = quick_config.get("timeout", 180)
+
+            # 读取深度模型参数
+            deep_max_tokens = deep_config.get("max_tokens", 4000)
+            deep_temperature = deep_config.get("temperature", 0.7)
+            deep_timeout = deep_config.get("timeout", 180)
+
+            logger.info(f"🔧 [小米-快速模型] max_tokens={quick_max_tokens}, temperature={quick_temperature}, timeout={quick_timeout}s")
+            logger.info(f"🔧 [小米-深度模型] max_tokens={deep_max_tokens}, temperature={deep_temperature}, timeout={deep_timeout}s")
+
+            # 获取 backend_url（如果配置中有的话）
+            backend_url = self.config.get("backend_url")
+            if backend_url:
+                logger.info(f"🔧 [小米] 使用自定义 API 地址: {backend_url}")
+
+            # 🔥 详细日志：打印所有 LLM 初始化参数
+            logger.info("=" * 80)
+            logger.info("🤖 [LLM初始化] 小米深度模型参 数:")
+            logger.info(f"   model: {self.config['deep_think_llm']}")
+            logger.info(f"   api_key: {'有值' if mimo_api_key else '空'} (长度: {len(mimo_api_key) if mimo_api_key else 0})")
+            logger.info(f"   base_url: {backend_url if backend_url else '默认'}")
+            logger.info(f"   temperature: {deep_temperature}")
+            logger.info(f"   max_tokens: {deep_max_tokens}")
+            logger.info(f"   request_timeout: {deep_timeout}")
+            logger.info("=" * 80)
+
+            self.deep_thinking_llm = ChatMimoOpenAI(
+                model=self.config["deep_think_llm"],
+                api_key=mimo_api_key,  # 🔥 传递 API Key
+                base_url=backend_url if backend_url else None,  # 传递 base_url
+                temperature=deep_temperature,
+                max_tokens=deep_max_tokens,
+                request_timeout=deep_timeout
+            )
+
+            logger.info("=" * 80)
+            logger.info("🤖 [LLM初始化] 小米快速模型参数:")
+            logger.info(f"   model: {self.config['quick_think_llm']}")
+            logger.info(f"   api_key: {'有值' if mimo_api_key else '空'} (长度: {len(mimo_api_key) if mimo_api_key else 0})")
+            logger.info(f"   base_url: {backend_url if backend_url else '默认'}")
+            logger.info(f"   temperature: {quick_temperature}")
+            logger.info(f"   max_tokens: {quick_max_tokens}")
+            logger.info(f"   request_timeout: {quick_timeout}")
+            logger.info("=" * 80)
+
+            self.quick_thinking_llm = ChatMimoOpenAI(
+                model=self.config["quick_think_llm"],
+                api_key=mimo_api_key,  # 🔥 传递 API Key
+                base_url=backend_url if backend_url else None,  # 传递 base_url
+                temperature=quick_temperature,
+                max_tokens=quick_max_tokens,
+                request_timeout=quick_timeout
+            )
+            logger.info(f"✅ [小米] 已应用用户配置的模型参数")
+
         else:
             # 🔧 通用的 OpenAI 兼容厂家支持（用于自定义厂家）
             logger.info(f"🔧 使用通用 OpenAI 兼容适配器处理自定义厂家: {self.config['llm_provider']}")
