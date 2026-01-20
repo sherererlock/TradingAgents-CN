@@ -519,7 +519,7 @@ def update_display(layout, spinner_text=None):
 def get_user_selections_fake():
     """Return fake user selections for testing."""
     return {
-        "ticker": "600160",
+        "ticker": "600089",
         "market": {
             "name": "A股",
             "name_en": "China A-Share",
@@ -529,13 +529,13 @@ def get_user_selections_fake():
             "pattern": r"^\d{6}$",
             "data_source": "china_stock",
         },
-        "analysis_date": "2026-01-08",
-        "analysts": [AnalystType.FUNDAMENTALS],
+        "analysis_date": "2026-01-16",
+        "analysts": [AnalystType.MARKET,AnalystType.NEWS,AnalystType.FUNDAMENTALS],
         "research_depth": 1,
         "llm_provider": "阿里百炼 (dashscope)",
         "backend_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "shallow_thinker": "deepseek-r1-0528",
-        "deep_thinker": "deepseek-r1-0528",
+        "shallow_thinker": "deepseek-v3.2",
+        "deep_thinker": "deepseek-v3.2",
     }
 
 def get_user_selections_fake_mimo():
@@ -552,7 +552,7 @@ def get_user_selections_fake_mimo():
             "data_source": "china_stock",
         },
         "analysis_date": "2026-01-15",
-        "analysts": [AnalystType.NEWS],
+        "analysts": [AnalystType.MARKET,AnalystType.NEWS,AnalystType.FUNDAMENTALS],
         "research_depth": 1,
         "llm_provider": "mimo",
         "backend_url": "https://api.xiaomimimo.com/v1",
@@ -1118,7 +1118,7 @@ def run_analysis():
     start_time = time.time()  # 记录开始时间
     
     # First get all user selections
-    selections = get_user_selections_fake_mimo_H()
+    selections = get_user_selections_fake()
 
 
     logger.info(f"用户选择 | User Selections: {selections}")

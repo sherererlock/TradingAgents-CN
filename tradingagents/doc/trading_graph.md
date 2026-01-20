@@ -13,6 +13,44 @@
         *   **参数配置**: 统一处理 `temperature`, `max_tokens`, `timeout` 等参数。
         *   **特殊适配**: 针对 Google、DashScope (阿里百炼)、DeepSeek 等厂家做了特殊适配（例如使用 `ChatGoogleOpenAI` 或 `ChatDashScopeOpenAI` 来解决工具调用的兼容性问题）。
 
+#### 1.1 LLM 适配器差异点（`tradingagents/llm_adapters/`）
+虽然很多适配器最终都要“长得像” `BaseChatModel`，但它们在实现上主要有以下差异：
+
+*   **继承的基类不同**
+    *   DashScope / Mimo /（部分）DeepSeek 走 OpenAI 兼容链路：直接继承 `ChatOpenAI`（或继承基于 `ChatOpenAI` 的统一基类）。
+        *   DashScope：[`ChatDashScopeOpenAI`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/dashscope_openai_adapter.py#L19-L137)
+        *   Mimo：[`ChatMimoOpenAI`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/mimo_openai_adapter.py#L29-L84)
+        *   DeepSeek（旧实现）：[`ChatDeepSeek`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/deepseek_adapter.py#L31-L229)
+    *   Google（Gemini）不是 `ChatOpenAI`：它继承 `ChatGoogleGenerativeAI`，主要目的是把 Gemini 的调用行为适配到系统预期。
+        *   Google：[`ChatGoogleOpenAI`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/google_openai_adapter.py#L21-L203)
+
+*   **API Key 与 base_url 的默认值/优先级不同**
+    *   DashScope：默认 `base_url=https://dashscope.aliyuncs.com/compatible-mode/v1`，优先用 `kwargs.api_key`，否则读 `DASHSCOPE_API_KEY` 并过滤占位符。
+        *   参考：[`ChatDashScopeOpenAI.__init__`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/dashscope_openai_adapter.py#L26-L101)
+    *   DeepSeek：默认 `base_url=https://api.deepseek.com`，读 `DEEPSEEK_API_KEY` 并过滤占位符。
+        *   参考：[`ChatDeepSeek.__init__`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/deepseek_adapter.py#L38-L104)
+    *   Mimo：默认 `base_url=https://api.xiaomimimo.com/v1`，读 `MIMO_API_KEY` 或兼容旧名 `XIAOMI_API_KEY`。
+        *   参考：[`ChatMimoOpenAI.__init__`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/mimo_openai_adapter.py#L29-L57)
+    *   Google：读 `GOOGLE_API_KEY`，并支持通过 `client_options.api_endpoint` 注入自定义端点（官方域名与中转域名走不同处理逻辑）。
+        *   参考：[`ChatGoogleOpenAI.__init__`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/google_openai_adapter.py#L28-L147)
+
+*   **Token 统计方式不同**
+    *   DashScope / Mimo：从 `result.llm_output["token_usage"]` 读取 prompt/completion tokens，并写入 `token_tracker`（追踪失败不影响主流程）。
+        *   DashScope：[`ChatDashScopeOpenAI._generate`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/dashscope_openai_adapter.py#L102-L136)
+        *   Mimo：[`ChatMimoOpenAI._generate`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/mimo_openai_adapter.py#L59-L84)
+    *   DeepSeek：优先从 `llm_output.token_usage` 取；取不到时用字符数估算输入/输出 tokens，并支持 `session_id`/`analysis_type` 传参用于归因。
+        *   参考：[`ChatDeepSeek._generate`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/deepseek_adapter.py#L107-L190)
+    *   OpenAI 兼容统一基类：通过重写 `_generate` 统一做耗时与 token 记录，读取 `ChatResult.usage_metadata`（偏新版本 LangChain 风格）。
+        *   参考：[`OpenAICompatibleBase`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/openai_compatible_base.py#L32-L195)
+
+*   **“统一工厂 + 注册表”的实现（更偏工程化）**
+    *   `openai_compatible_base.py` 提供了 `OPENAI_COMPATIBLE_PROVIDERS` 注册表与 `create_openai_compatible_llm()` 工厂，把“读 key/配 base_url/初始化参数/日志与 token 记录”集中到同一处，减少各适配器的重复代码。
+        *   参考：[`OPENAI_COMPATIBLE_PROVIDERS`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/openai_compatible_base.py#L430-L497)、[`create_openai_compatible_llm`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/openai_compatible_base.py#L500-L533)
+
+*   **内容/错误处理的特殊逻辑**
+    *   Google：会对疑似“新闻内容”补齐发布时间/标题/来源等字段，并在异常时返回带错误说明的 `LLMResult`（不中断上层图流程）。
+        *   参考：[`ChatGoogleOpenAI._generate`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/google_openai_adapter.py#L159-L203)、[`_enhance_news_content`](file:///e:/workspace/GitRepository/TradingAgents-CN/tradingagents/llm_adapters/google_openai_adapter.py#L233-L259)
+
 ### 2. 双脑架构 (Quick vs Deep)
 在 `TradingAgentsGraph` 类的 `__init__` 方法中，你可以看到系统初始化了两个不同的大脑：
 
