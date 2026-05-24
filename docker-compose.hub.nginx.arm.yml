@@ -69,7 +69,7 @@ services:
     container_name: tradingagents-backend
     restart: unless-stopped
     expose:
-      - "8000"
+      - "8010"
     volumes:
       - ./logs:/app/logs
       #- ./config:/app/config
@@ -134,7 +134,7 @@ services:
     networks:
       - tradingagents-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8010/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

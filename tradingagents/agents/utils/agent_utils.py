@@ -23,6 +23,18 @@ from tradingagents.utils.logging_manager import get_logger
 logger = get_logger('agents')
 
 
+def get_language_instruction() -> str:
+    """Return a prompt instruction for the configured output language.
+
+    Returns empty string when English (default), so no extra tokens are used.
+    """
+    from tradingagents.default_config import DEFAULT_CONFIG
+    lang = DEFAULT_CONFIG.get("output_language", "Chinese")
+    if lang.strip().lower() in ("english", "chinese"):
+        return ""
+    return f" Write your entire response in {lang}."
+
+
 def create_msg_delete():
     def delete_messages(state):
         """Clear messages and add placeholder for Anthropic compatibility"""

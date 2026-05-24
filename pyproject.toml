@@ -55,6 +55,7 @@ dependencies = [
     "langchain-google-genai>=2.1.12",  # 修复 client_options 未定义错误
     "langchain-openai>=0.3.23",
     "langgraph>=0.4.8",
+    "langgraph-checkpoint-sqlite>=2.0.0",
     "openai>=1.0.0,<2.0.0",
 
     # 数据处理和分析
@@ -79,6 +80,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pytz>=2025.2",
     "questionary>=2.1.0",
+    "typer>=0.21.0",
     "rich>=14.0.0",
     "setuptools>=80.9.0",
     "streamlit>=1.28.0",

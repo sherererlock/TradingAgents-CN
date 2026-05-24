@@ -1943,3 +1943,34 @@ def get_stock_data_by_market(symbol: str, start_date: str = None, end_date: str 
     except Exception as e:
         logger.error(f"❌ 获取股票数据失败: {e}")
         return f"❌ 获取股票{symbol}数据失败: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Vendor routing compatibility layer
+# ---------------------------------------------------------------------------
+# Maps the original TradingAgents route_to_vendor(method, *args) pattern
+# to the CN version's existing interface functions.
+
+def route_to_vendor(method: str, *args, **kwargs):
+    """Route method calls to the appropriate CN implementation.
+
+    This is a compatibility layer for the original TradingAgents data tools
+    (core_stock_tools, fundamental_data_tools, news_data_tools, technical_indicators_tools)
+    which use route_to_vendor("method_name", ...).
+    """
+    _VENDOR_MAP = {
+        "get_stock_data": lambda a, kw: get_stock_data_by_market(a[0], a[1], a[2]),
+        "get_indicators": lambda a, kw: get_stock_stats_indicators_window(a[0], a[2], a[1], a[3] if len(a) > 3 else 30),
+        "get_fundamentals": lambda a, kw: get_fundamentals_finnhub(a[0], a[1]),
+        "get_balance_sheet": lambda a, kw: get_simfin_balance_sheet(a[0], a[1] if len(a) > 1 else "quarterly", a[2] if len(a) > 2 else None),
+        "get_cashflow": lambda a, kw: get_simfin_cashflow(a[0], a[1] if len(a) > 1 else "quarterly", a[2] if len(a) > 2 else None),
+        "get_income_statement": lambda a, kw: get_simfin_income_statements(a[0], a[1] if len(a) > 1 else "quarterly", a[2] if len(a) > 2 else None),
+        "get_news": lambda a, kw: get_finnhub_news(a[0], a[1], a[2]),
+        "get_global_news": lambda a, kw: get_reddit_global_news(a[0], a[1] if len(a) > 1 else 7, a[2] if len(a) > 2 else 5),
+        "get_insider_transactions": lambda a, kw: get_finnhub_company_insider_transactions(a[0]),
+    }
+
+    handler = _VENDOR_MAP.get(method)
+    if handler is None:
+        raise ValueError(f"Unknown vendor method: {method}")
+    return handler(args, kwargs)

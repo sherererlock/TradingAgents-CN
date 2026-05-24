@@ -14,6 +14,7 @@ feedparser
 stockstats
 eodhd
 langgraph
+langgraph-checkpoint-sqlite
 chromadb
 setuptools
 akshare>=1.17.86
@@ -29,6 +30,7 @@ redis
 chainlit
 rich
 questionary
+typer
 langchain_anthropic
 langchain-google-genai>=2.1.12  # 修复 client_options 未定义错误
 google-genai>=0.1.0
